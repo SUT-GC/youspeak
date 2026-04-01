@@ -5,7 +5,6 @@ YouSpeak - 语音输入工具
 """
 
 import threading
-import queue
 import time
 import sys
 import os
@@ -42,74 +41,72 @@ def type_text(text: str):
         Quartz.CGEventKeyboardSetUnicodeString(ev_up, len(char), char)
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev_up)
 
-        time.sleep(0.004)   # 避免输入太快被部分 app 丢字
-
-
-class ASRCallback(RecognitionCallback):
-    """DashScope 实时 ASR 回调"""
-
-    def __init__(self, app):
-        self.app = app
-
-    def on_open(self):
-        print("[ASR] 连接成功")
-        self.app.asr_ready.set()  # 通知发送线程可以开始发数据了
-
-    def on_complete(self):
-        print("[ASR] 识别结束")
-
-    def on_error(self, result):
-        print(f"[ASR 错误] {result}")
-        self.app.asr_ready.set()
-
-    def on_event(self, result: RecognitionResult):
-        if result.status_code != 200:
-            return
-        sentence = result.get_sentence()
-        if not sentence or "text" not in sentence:
-            return
-        text = sentence["text"]
-        if RecognitionResult.is_sentence_end(sentence):
-            print(f"\n[输入] {text}")
-            threading.Thread(target=type_text, args=(text,), daemon=True).start()
-        else:
-            print(f"[识别中] {text}   ", end="\r", flush=True)
+        time.sleep(0.004)
 
 
 class SpeechApp:
     def __init__(self):
         self.is_recording = False
-        self.recognition: Recognition | None = None
+        self.audio_buffer: list[bytes] = []
         self.audio_stream: sd.InputStream | None = None
-        self.asr_ready = threading.Event()
-        self.audio_queue: queue.Queue = queue.Queue()
         self._lock = threading.Lock()
 
-    # -------- 音频回调：先入队，不直接发 --------
+    # -------- 音频回调：录到 buffer --------
 
     def _audio_callback(self, indata, frames, time_info, status):
         if not self.is_recording:
             return
         pcm = (indata[:, 0] * 32767).astype(np.int16).tobytes()
-        self.audio_queue.put(pcm)
+        self.audio_buffer.append(pcm)
 
-    # -------- 发送线程：等连接好再把队列里的数据发出去 --------
+    # -------- 录音完成后发给 ASR --------
 
-    def _send_worker(self):
-        self.asr_ready.wait()          # 等 on_open 触发
-        while True:
+    def _transcribe(self, audio_buffer: list[bytes]):
+        if not audio_buffer:
+            return
+
+        print("⏳ 识别中…")
+        result_text: list[str] = []
+        done = threading.Event()
+
+        class CB(RecognitionCallback):
+            def on_open(self): pass
+            def on_complete(self): done.set()
+            def on_error(self, r):
+                print(f"[ASR 错误] {r}")
+                done.set()
+            def on_event(self, r: RecognitionResult):
+                if r.status_code != 200:
+                    return
+                s = r.get_sentence()
+                if s and "text" in s and RecognitionResult.is_sentence_end(s):
+                    result_text.append(s["text"])
+
+        rec = Recognition(
+            model="paraformer-realtime-v2",
+            format="pcm",
+            sample_rate=SAMPLE_RATE,
+            api_key=API_KEY,
+            callback=CB(),
+        )
+        rec.start()
+        for chunk in audio_buffer:
             try:
-                pcm = self.audio_queue.get(timeout=0.1)
-            except queue.Empty:
-                if not self.is_recording:
-                    break
-                continue
-            if self.recognition is None:
-                break
-            try:
-                self.recognition.send_audio_frame(pcm)
+                rec.send_audio_frame(chunk)
             except Exception:
                 break
+        try:
+            rec.stop()
+        except Exception:
+            pass
+        done.wait(timeout=15)
+
+        text = "".join(result_text)
+        if text:
+            print(f"[输入] {text}")
+            type_text(text)
+        else:
+            print("（未识别到内容）")
 
     # -------- 录音控制 --------
 
@@ -117,22 +114,8 @@ class SpeechApp:
         with self._lock:
             if self.is_recording:
                 return
-            print("\n🎤 录音中…（松开 右Option 停止）")
-            self.asr_ready.clear()
-            self.audio_queue = queue.Queue()
-
-            self.recognition = Recognition(
-                model="paraformer-realtime-v2",
-                format="pcm",
-                sample_rate=SAMPLE_RATE,
-                api_key=API_KEY,
-                callback=ASRCallback(self),
-            )
-            self.recognition.start()
-
-            # 发送线程：连接建立后把缓冲音频发出去
-            threading.Thread(target=self._send_worker, daemon=True).start()
-
+            print("\n🎤 录音中…（松开 右⌥ 停止）")
+            self.audio_buffer = []
             self.audio_stream = sd.InputStream(
                 samplerate=SAMPLE_RATE,
                 channels=1,
@@ -147,15 +130,15 @@ class SpeechApp:
         with self._lock:
             if not self.is_recording:
                 return
-            print("\n⏹ 处理中…")
             self.is_recording = False
             if self.audio_stream:
                 self.audio_stream.stop()
                 self.audio_stream.close()
                 self.audio_stream = None
-            if self.recognition:
-                self.recognition.stop()
-                self.recognition = None
+            # 把 buffer 快照传给识别线程，主线程继续响应热键
+            buf = self.audio_buffer
+            self.audio_buffer = []
+        threading.Thread(target=self._transcribe, args=(buf,), daemon=True).start()
 
     # -------- 键盘监听 --------
 
