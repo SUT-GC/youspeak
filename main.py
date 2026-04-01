@@ -7,18 +7,21 @@ YouSpeak - 语音输入工具
 import threading
 import time
 import sys
+import os
 import numpy as np
+from dotenv import load_dotenv
+
+load_dotenv()
 import sounddevice as sd
 from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 from pynput import keyboard
 import Quartz
 
 # ============ 配置 ============
-import os
 API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
 if not API_KEY:
-    print("❌ 请先设置环境变量 DASHSCOPE_API_KEY")
-    print("   export DASHSCOPE_API_KEY=sk-xxxxxxxx")
+    print("❌ 请在项目目录创建 .env 文件，填入：")
+    print("   DASHSCOPE_API_KEY=sk-xxxxxxxx")
     sys.exit(1)
 HOTKEY = keyboard.Key.alt_r   # 右 Option 键，可改成其他键
 SAMPLE_RATE = 16000
