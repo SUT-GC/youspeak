@@ -28,10 +28,12 @@ python3 -m venv .venv
 
 ## 配置
 
-编辑 `main.py`，填入你的 DashScope API Key：
+复制 `.env.example` 为 `.env`，填入你的 DashScope API Key：
 
-```python
-API_KEY = "sk-xxxxxxxxxxxxxxxx"
+```bash
+cp .env.example .env
+# 编辑 .env，填入真实 key
+export DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx
 ```
 
 默认快捷键是右 Option 键，可修改 `HOTKEY` 变量：

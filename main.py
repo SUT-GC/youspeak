@@ -14,7 +14,12 @@ from pynput import keyboard
 import Quartz
 
 # ============ 配置 ============
-API_KEY = "sk-047a70e7b12a4eb6bc49bc7145939a5d"
+import os
+API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
+if not API_KEY:
+    print("❌ 请先设置环境变量 DASHSCOPE_API_KEY")
+    print("   export DASHSCOPE_API_KEY=sk-xxxxxxxx")
+    sys.exit(1)
 HOTKEY = keyboard.Key.alt_r   # 右 Option 键，可改成其他键
 SAMPLE_RATE = 16000
 CHUNK_FRAMES = 3200            # 200ms per chunk @ 16kHz
