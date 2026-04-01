@@ -5,6 +5,7 @@ YouSpeak - 语音输入工具
 """
 
 import threading
+import queue
 import time
 import sys
 import os
@@ -47,14 +48,19 @@ def type_text(text: str):
 class ASRCallback(RecognitionCallback):
     """DashScope 实时 ASR 回调"""
 
+    def __init__(self, app):
+        self.app = app
+
     def on_open(self):
         print("[ASR] 连接成功")
+        self.app.asr_ready.set()  # 通知发送线程可以开始发数据了
 
     def on_complete(self):
         print("[ASR] 识别结束")
 
     def on_error(self, result):
         print(f"[ASR 错误] {result}")
+        self.app.asr_ready.set()
 
     def on_event(self, result: RecognitionResult):
         if result.status_code != 200:
@@ -64,11 +70,9 @@ class ASRCallback(RecognitionCallback):
             return
         text = sentence["text"]
         if RecognitionResult.is_sentence_end(sentence):
-            # 句子结束，实际输入文字
             print(f"\n[输入] {text}")
             threading.Thread(target=type_text, args=(text,), daemon=True).start()
         else:
-            # 中间结果，仅打印预览
             print(f"[识别中] {text}   ", end="\r", flush=True)
 
 
@@ -77,15 +81,35 @@ class SpeechApp:
         self.is_recording = False
         self.recognition: Recognition | None = None
         self.audio_stream: sd.InputStream | None = None
+        self.asr_ready = threading.Event()
+        self.audio_queue: queue.Queue = queue.Queue()
         self._lock = threading.Lock()
 
-    # -------- 音频回调 --------
+    # -------- 音频回调：先入队，不直接发 --------
 
     def _audio_callback(self, indata, frames, time_info, status):
-        if not self.is_recording or self.recognition is None:
+        if not self.is_recording:
             return
         pcm = (indata[:, 0] * 32767).astype(np.int16).tobytes()
-        self.recognition.send_audio_frame(pcm)
+        self.audio_queue.put(pcm)
+
+    # -------- 发送线程：等连接好再把队列里的数据发出去 --------
+
+    def _send_worker(self):
+        self.asr_ready.wait()          # 等 on_open 触发
+        while True:
+            try:
+                pcm = self.audio_queue.get(timeout=0.1)
+            except queue.Empty:
+                if not self.is_recording:
+                    break
+                continue
+            if self.recognition is None:
+                break
+            try:
+                self.recognition.send_audio_frame(pcm)
+            except Exception:
+                break
 
     # -------- 录音控制 --------
 
@@ -94,14 +118,21 @@ class SpeechApp:
             if self.is_recording:
                 return
             print("\n🎤 录音中…（松开 右Option 停止）")
+            self.asr_ready.clear()
+            self.audio_queue = queue.Queue()
+
             self.recognition = Recognition(
                 model="paraformer-realtime-v2",
                 format="pcm",
                 sample_rate=SAMPLE_RATE,
                 api_key=API_KEY,
-                callback=ASRCallback(),
+                callback=ASRCallback(self),
             )
             self.recognition.start()
+
+            # 发送线程：连接建立后把缓冲音频发出去
+            threading.Thread(target=self._send_worker, daemon=True).start()
+
             self.audio_stream = sd.InputStream(
                 samplerate=SAMPLE_RATE,
                 channels=1,
