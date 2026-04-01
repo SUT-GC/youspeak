@@ -116,33 +116,33 @@ class OverlayController(AppKit.NSObject):
         self._window = panel
         self._label = label
 
-    # --- 主线程 selector ---
+    # --- 主线程 selector（方法名末尾 _ 对应 ObjC selector 的 :）---
 
-    def _show(self, _):
+    def doShow_(self, _):
         self._label.setStringValue_("🎤  录音中…")
         self._window.orderFront_(None)
 
-    def _showProcessing(self, _):
+    def doShowProcessing_(self, _):
         self._label.setStringValue_("⏳  识别中…")
 
-    def _hide(self, _):
+    def doHide_(self, _):
         self._window.orderOut_(None)
 
     # --- 后台线程调用入口 ---
 
     def show(self):
         self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"_show:", None, False
+            b"doShow:", None, False
         )
 
     def show_processing(self):
         self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"_showProcessing:", None, False
+            b"doShowProcessing:", None, False
         )
 
     def hide(self):
         self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"_hide:", None, False
+            b"doHide:", None, False
         )
 
 
