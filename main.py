@@ -6,15 +6,20 @@ YouSpeak - 语音输入工具
 
 import threading
 import time
+import signal
 import sys
 import os
 import numpy as np
 from dotenv import load_dotenv
 
 load_dotenv()
+
 import sounddevice as sd
 from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 from pynput import keyboard
+import objc
+import AppKit
+import Foundation
 import Quartz
 
 # ============ 配置 ============
@@ -36,22 +41,120 @@ def type_text(text: str):
         ev_down = Quartz.CGEventCreateKeyboardEvent(src, 0, True)
         Quartz.CGEventKeyboardSetUnicodeString(ev_down, len(char), char)
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev_down)
-
         ev_up = Quartz.CGEventCreateKeyboardEvent(src, 0, False)
         Quartz.CGEventKeyboardSetUnicodeString(ev_up, len(char), char)
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev_up)
-
         time.sleep(0.004)
 
 
+# -------- 浮窗（可覆盖全屏 App）--------
+
+class OverlayController(AppKit.NSObject):
+    """
+    系统 HUD 风格浮窗，悬浮于所有窗口之上（包括全屏 App）。
+    UI 操作全部通过 performSelectorOnMainThread 派发到主线程。
+    """
+
+    W = 180
+    H = 46
+
+    def init(self):
+        self = objc.super(OverlayController, self).init()
+        self._window = None
+        self._label = None
+        return self
+
+    def setup(self):
+        """在主线程调用一次"""
+        W, H = self.W, self.H
+        panel = AppKit.NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+            Foundation.NSMakeRect(0, 0, W, H),
+            AppKit.NSWindowStyleMaskBorderless,
+            AppKit.NSBackingStoreBuffered,
+            False,
+        )
+        # 浮在全屏 App 之上
+        panel.setLevel_(AppKit.NSStatusWindowLevel + 1)
+        panel.setCollectionBehavior_(
+            AppKit.NSWindowCollectionBehaviorCanJoinAllSpaces
+            | AppKit.NSWindowCollectionBehaviorStationary
+        )
+        panel.setOpaque_(False)
+        panel.setAlphaValue_(0.95)
+        panel.setHasShadow_(True)
+
+        # 系统 HUD 磨砂玻璃背景
+        effect = AppKit.NSVisualEffectView.alloc().initWithFrame_(
+            Foundation.NSMakeRect(0, 0, W, H)
+        )
+        effect.setMaterial_(AppKit.NSVisualEffectMaterialHUDWindow)
+        effect.setBlendingMode_(AppKit.NSVisualEffectBlendingModeBehindWindow)
+        effect.setState_(AppKit.NSVisualEffectStateActive)
+        effect.setWantsLayer_(True)
+        effect.layer().setCornerRadius_(12.0)
+        effect.layer().setMasksToBounds_(True)
+        panel.setContentView_(effect)
+
+        # 文字标签
+        label = AppKit.NSTextField.alloc().initWithFrame_(
+            Foundation.NSMakeRect(0, 11, W, 24)
+        )
+        label.setStringValue_("🎤  录音中…")
+        label.setAlignment_(AppKit.NSTextAlignmentCenter)
+        label.setBordered_(False)
+        label.setEditable_(False)
+        label.setSelectable_(False)
+        label.setDrawsBackground_(False)
+        label.setTextColor_(AppKit.NSColor.whiteColor())
+        label.setFont_(AppKit.NSFont.systemFontOfSize_(14))
+        effect.addSubview_(label)
+
+        # 屏幕居中偏下
+        screen_w = AppKit.NSScreen.mainScreen().frame().size.width
+        panel.setFrameOrigin_(Foundation.NSMakePoint((screen_w - W) / 2, 100))
+
+        self._window = panel
+        self._label = label
+
+    # --- 主线程 selector ---
+
+    def _show(self, _):
+        self._label.setStringValue_("🎤  录音中…")
+        self._window.orderFront_(None)
+
+    def _showProcessing(self, _):
+        self._label.setStringValue_("⏳  识别中…")
+
+    def _hide(self, _):
+        self._window.orderOut_(None)
+
+    # --- 后台线程调用入口 ---
+
+    def show(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            b"_show:", None, False
+        )
+
+    def show_processing(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            b"_showProcessing:", None, False
+        )
+
+    def hide(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            b"_hide:", None, False
+        )
+
+
+# -------- 主逻辑 --------
+
 class SpeechApp:
-    def __init__(self):
+    def __init__(self, overlay: OverlayController):
+        self.overlay = overlay
         self.is_recording = False
         self.audio_buffer: list[bytes] = []
         self.audio_stream: sd.InputStream | None = None
         self._lock = threading.Lock()
-
-    # -------- 音频回调：录到 buffer --------
 
     def _audio_callback(self, indata, frames, time_info, status):
         if not self.is_recording:
@@ -59,13 +162,11 @@ class SpeechApp:
         pcm = (indata[:, 0] * 32767).astype(np.int16).tobytes()
         self.audio_buffer.append(pcm)
 
-    # -------- 录音完成后发给 ASR --------
-
     def _transcribe(self, audio_buffer: list[bytes]):
         if not audio_buffer:
+            self.overlay.hide()
             return
 
-        print("⏳ 识别中…")
         result_text: list[str] = []
         done = threading.Event()
 
@@ -95,13 +196,14 @@ class SpeechApp:
                 rec.send_audio_frame(chunk)
             except Exception:
                 break
+        audio_buffer.clear()
         try:
             rec.stop()
         except Exception:
             pass
         done.wait(timeout=15)
 
-        audio_buffer.clear()
+        self.overlay.hide()
 
         text = "".join(result_text)
         if text:
@@ -110,13 +212,10 @@ class SpeechApp:
         else:
             print("（未识别到内容）")
 
-    # -------- 录音控制 --------
-
     def start_recording(self):
         with self._lock:
             if self.is_recording:
                 return
-            print("\n🎤 录音中…（松开 右⌥ 停止）")
             self.audio_buffer = []
             self.audio_stream = sd.InputStream(
                 samplerate=SAMPLE_RATE,
@@ -127,22 +226,21 @@ class SpeechApp:
             )
             self.audio_stream.start()
             self.is_recording = True
+            self.overlay.show()
 
     def stop_recording(self):
         with self._lock:
             if not self.is_recording:
                 return
             self.is_recording = False
+            self.overlay.show_processing()
             if self.audio_stream:
                 self.audio_stream.stop()
                 self.audio_stream.close()
                 self.audio_stream = None
-            # 把 buffer 快照传给识别线程，主线程继续响应热键
             buf = self.audio_buffer
             self.audio_buffer = []
         threading.Thread(target=self._transcribe, args=(buf,), daemon=True).start()
-
-    # -------- 键盘监听 --------
 
     def _on_press(self, key):
         if key == HOTKEY:
@@ -152,23 +250,41 @@ class SpeechApp:
         if key == HOTKEY:
             threading.Thread(target=self.stop_recording, daemon=True).start()
 
-    # -------- 入口 --------
 
-    def run(self):
-        print("=" * 42)
-        print("  YouSpeak 语音输入  (按住 右⌥ 说话)")
-        print("  Ctrl+C 退出")
-        print("=" * 42)
+def main():
+    # 不显示 Dock 图标
+    ns_app = AppKit.NSApplication.sharedApplication()
+    ns_app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+
+    overlay = OverlayController.alloc().init()
+    overlay.setup()
+
+    speech_app = SpeechApp(overlay)
+
+    # Ctrl+C 退出
+    def handle_sigint(sig, frame):
+        ns_app.performSelectorOnMainThread_withObject_waitUntilDone_(
+            b"stop:", None, False
+        )
+    signal.signal(signal.SIGINT, handle_sigint)
+
+    # 键盘监听跑在子线程（NSApp 需要占用主线程）
+    def run_keyboard():
         with keyboard.Listener(
-            on_press=self._on_press,
-            on_release=self._on_release,
+            on_press=speech_app._on_press,
+            on_release=speech_app._on_release,
         ) as listener:
-            try:
-                listener.join()
-            except KeyboardInterrupt:
-                self.stop_recording()
-                print("\n再见！")
+            listener.join()
+
+    threading.Thread(target=run_keyboard, daemon=True).start()
+
+    print("=" * 42)
+    print("  YouSpeak 语音输入  (按住 右⌥ 说话)")
+    print("  Ctrl+C 退出")
+    print("=" * 42)
+
+    ns_app.run()
 
 
 if __name__ == "__main__":
-    SpeechApp().run()
+    main()
