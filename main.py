@@ -265,9 +265,8 @@ def main():
 
     # Ctrl+C 退出
     def handle_sigint(sig, frame):
-        ns_app.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"stop:", None, False
-        )
+        print("\n再见！")
+        os._exit(0)
     signal.signal(signal.SIGINT, handle_sigint)
 
     # 键盘监听跑在子线程（NSApp 需要占用主线程）
