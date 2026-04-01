@@ -167,7 +167,8 @@ class SpeechApp:
             self.overlay.hide()
             return
 
-        result_text: list[str] = []
+        # 用 dict 按 sentence_id 去重：同一句话可能触发多次 sentence_end，只保留最新的
+        result_sentences: dict[int, str] = {}
         done = threading.Event()
 
         class CB(RecognitionCallback):
@@ -181,7 +182,8 @@ class SpeechApp:
                     return
                 s = r.get_sentence()
                 if s and "text" in s and RecognitionResult.is_sentence_end(s):
-                    result_text.append(s["text"])
+                    sid = s.get("sentence_id", len(result_sentences))
+                    result_sentences[sid] = s["text"]
 
         rec = Recognition(
             model="paraformer-realtime-v2",
@@ -205,7 +207,7 @@ class SpeechApp:
 
         self.overlay.hide()
 
-        text = "".join(result_text)
+        text = "".join(result_sentences[k] for k in sorted(result_sentences))
         if text:
             print(f"[输入] {text}")
             type_text(text)
