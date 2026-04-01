@@ -108,9 +108,11 @@ class OverlayController(AppKit.NSObject):
         label.setFont_(AppKit.NSFont.systemFontOfSize_(14))
         effect.addSubview_(label)
 
-        # 屏幕居中偏下
-        screen_w = AppKit.NSScreen.mainScreen().frame().size.width
-        panel.setFrameOrigin_(Foundation.NSMakePoint((screen_w - W) / 2, 100))
+        # 屏幕正中间（方便确认是否可见）
+        screen = AppKit.NSScreen.mainScreen().frame()
+        x = (screen.size.width - W) / 2
+        y = (screen.size.height - H) / 2
+        panel.setFrameOrigin_(Foundation.NSMakePoint(x, y))
 
         self._window = panel
         self._label = label
