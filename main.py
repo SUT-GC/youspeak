@@ -78,17 +78,9 @@ class OverlayController(AppKit.NSObject):
             AppKit.NSWindowCollectionBehaviorCanJoinAllSpaces
             | AppKit.NSWindowCollectionBehaviorStationary
         )
-        panel.setOpaque_(False)
-        panel.setAlphaValue_(0.95)
+        panel.setOpaque_(True)
         panel.setHasShadow_(True)
-        panel.setBackgroundColor_(
-            AppKit.NSColor.colorWithRed_green_blue_alpha_(0.1, 0.1, 0.1, 0.9)
-        )
-
-        # 圆角
-        panel.contentView().setWantsLayer_(True)
-        panel.contentView().layer().setCornerRadius_(12.0)
-        panel.contentView().layer().setMasksToBounds_(True)
+        panel.setBackgroundColor_(AppKit.NSColor.darkGrayColor())
 
         # 文字标签
         label = AppKit.NSTextField.alloc().initWithFrame_(
