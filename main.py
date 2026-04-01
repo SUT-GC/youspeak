@@ -121,6 +121,7 @@ class OverlayController(AppKit.NSObject):
     def doShow_(self, _):
         self._label.setStringValue_("🎤  录音中…")
         self._window.orderFront_(None)
+        print(f"[浮窗] 显示，isVisible={self._window.isVisible()}")
 
     def doShowProcessing_(self, _):
         self._label.setStringValue_("⏳  识别中…")
@@ -167,8 +168,9 @@ class SpeechApp:
             self.overlay.hide()
             return
 
-        # 用 dict 按 sentence_id 去重：同一句话可能触发多次 sentence_end，只保留最新的
+        # 只收 stop() 之后的最终结果，忽略发送过程中的中间 sentence_end（会重复）
         result_sentences: dict[int, str] = {}
+        all_sent = threading.Event()
         done = threading.Event()
 
         class CB(RecognitionCallback):
@@ -178,6 +180,8 @@ class SpeechApp:
                 print(f"[ASR 错误] {r}")
                 done.set()
             def on_event(self, r: RecognitionResult):
+                if not all_sent.is_set():
+                    return  # 音频还没发完，忽略中间结果
                 if r.status_code != 200:
                     return
                 s = r.get_sentence()
@@ -199,6 +203,7 @@ class SpeechApp:
             except Exception:
                 break
         audio_buffer.clear()
+        all_sent.set()  # 标记音频发送完毕，之后的结果才收
         try:
             rec.stop()
         except Exception:
