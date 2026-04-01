@@ -17,9 +17,8 @@ import sounddevice as sd
 from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 from dashscope import Generation
 from pynput import keyboard
-import objc
-import AppKit
 import Foundation
+import AppKit
 import Quartz
 
 # ============ 配置 ============
@@ -28,7 +27,7 @@ if not API_KEY:
     print("❌ 请在项目目录创建 .env 文件，填入：")
     print("   DASHSCOPE_API_KEY=sk-xxxxxxxx")
     sys.exit(1)
-HOTKEY = keyboard.Key.alt_r   # 右 Option 键，可改成其他键
+HOTKEY = keyboard.Key.alt_r   # 右 Option 键
 SAMPLE_RATE = 16000
 CHUNK_FRAMES = 3200            # 200ms per chunk @ 16kHz
 # ==============================
@@ -69,119 +68,17 @@ def polish_text(raw: str) -> str:
             return resp.output.text.strip()
     except Exception as e:
         print(f"[润色失败] {e}")
-    return raw  # 失败则返回原始文本
+    return raw
 
-
-# -------- 浮窗（可覆盖全屏 App）--------
-
-class OverlayController(AppKit.NSObject):
-    """
-    系统 HUD 风格浮窗，悬浮于所有窗口之上（包括全屏 App）。
-    UI 操作全部通过 performSelectorOnMainThread 派发到主线程。
-    """
-
-    W = 180
-    H = 46
-
-    def init(self):
-        self = objc.super(OverlayController, self).init()
-        self._window = None
-        self._label = None
-        return self
-
-    def setup(self):
-        """在主线程调用一次"""
-        W, H = self.W, self.H
-        panel = AppKit.NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
-            Foundation.NSMakeRect(0, 0, W, H),
-            AppKit.NSWindowStyleMaskBorderless,
-            AppKit.NSBackingStoreBuffered,
-            False,
-        )
-        # 浮在全屏 App 之上
-        panel.setLevel_(AppKit.NSStatusWindowLevel + 1)
-        panel.setCollectionBehavior_(
-            AppKit.NSWindowCollectionBehaviorCanJoinAllSpaces
-            | AppKit.NSWindowCollectionBehaviorStationary
-        )
-        panel.setOpaque_(True)
-        panel.setHasShadow_(True)
-        panel.setBackgroundColor_(AppKit.NSColor.darkGrayColor())
-
-        # 文字标签
-        label = AppKit.NSTextField.alloc().initWithFrame_(
-            Foundation.NSMakeRect(0, 11, W, 24)
-        )
-        label.setStringValue_("🎤  录音中…")
-        label.setAlignment_(AppKit.NSTextAlignmentCenter)
-        label.setBordered_(False)
-        label.setEditable_(False)
-        label.setSelectable_(False)
-        label.setDrawsBackground_(False)
-        label.setTextColor_(AppKit.NSColor.whiteColor())
-        label.setFont_(AppKit.NSFont.systemFontOfSize_(14))
-        panel.contentView().addSubview_(label)
-
-        # 屏幕正中间（方便确认是否可见）
-        screen = AppKit.NSScreen.mainScreen().frame()
-        x = (screen.size.width - W) / 2
-        y = (screen.size.height - H) / 2
-        panel.setFrameOrigin_(Foundation.NSMakePoint(x, y))
-
-        self._window = panel
-        self._label = label
-        print(f"[浮窗] 初始化完成，位置=({x:.0f}, {y:.0f})")
-
-    # --- 主线程 selector（方法名末尾 _ 对应 ObjC selector 的 :）---
-
-    def doShow_(self, _):
-        self._label.setStringValue_("🎤  录音中…")
-        self._window.orderFront_(None)
-        print(f"[浮窗] 显示，isVisible={self._window.isVisible()}")
-
-    def doShowProcessing_(self, _):
-        self._label.setStringValue_("⏳  识别中…")
-
-    def doShowPolishing_(self, _):
-        self._label.setStringValue_("✨  润色中…")
-
-    def doHide_(self, _):
-        self._window.orderOut_(None)
-
-    # --- 后台线程调用入口 ---
-
-    def show(self):
-        print("[浮窗] show() 调用中...")
-        self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"doShow:", None, True
-        )
-        print("[浮窗] show() 完成")
-
-    def show_processing(self):
-        self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"doShowProcessing:", None, False
-        )
-
-    def show_polishing(self):
-        self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"doShowPolishing:", None, False
-        )
-
-    def hide(self):
-        self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"doHide:", None, False
-        )
-
-
-# -------- 主逻辑 --------
 
 class SpeechApp:
-    def __init__(self, overlay: OverlayController):
-        self.overlay = overlay
+    def __init__(self):
         self.is_recording = False
         self.audio_buffer: list[bytes] = []
         self.audio_stream: sd.InputStream | None = None
-        self._lock = threading.Lock()
+        self._record_lock = threading.Lock()
+        # 保证同一时间只有一个转录+输出在运行，防止快速按键导致文字交叉
+        self._transcribe_lock = threading.Lock()
 
     def _audio_callback(self, indata, frames, time_info, status):
         if not self.is_recording:
@@ -190,67 +87,63 @@ class SpeechApp:
         self.audio_buffer.append(pcm)
 
     def _transcribe(self, audio_buffer: list[bytes]):
-        if not audio_buffer:
-            self.overlay.hide()
-            return
+        with self._transcribe_lock:
+            if not audio_buffer:
+                return
 
-        # 只收 stop() 之后的最终结果，忽略发送过程中的中间 sentence_end（会重复）
-        result_sentences: dict[int, str] = {}
-        all_sent = threading.Event()
-        done = threading.Event()
+            result_sentences: dict[int, str] = {}
+            all_sent = threading.Event()
+            done = threading.Event()
 
-        class CB(RecognitionCallback):
-            def on_open(self): pass
-            def on_complete(self): done.set()
-            def on_error(self, r):
-                print(f"[ASR 错误] {r}")
-                done.set()
-            def on_event(self, r: RecognitionResult):
-                if not all_sent.is_set():
-                    return  # 音频还没发完，忽略中间结果
-                if r.status_code != 200:
-                    return
-                s = r.get_sentence()
-                if s and "text" in s and RecognitionResult.is_sentence_end(s):
-                    sid = s.get("sentence_id", len(result_sentences))
-                    result_sentences[sid] = s["text"]
+            class CB(RecognitionCallback):
+                def on_open(self): pass
+                def on_complete(self): done.set()
+                def on_error(self, r):
+                    print(f"[ASR 错误] {r}")
+                    done.set()
+                def on_event(self, r: RecognitionResult):
+                    if not all_sent.is_set():
+                        return
+                    if r.status_code != 200:
+                        return
+                    s = r.get_sentence()
+                    if s and "text" in s and RecognitionResult.is_sentence_end(s):
+                        sid = s.get("sentence_id", len(result_sentences))
+                        result_sentences[sid] = s["text"]
 
-        rec = Recognition(
-            model="paraformer-realtime-v2",
-            format="pcm",
-            sample_rate=SAMPLE_RATE,
-            api_key=API_KEY,
-            callback=CB(),
-        )
-        rec.start()
-        for chunk in audio_buffer:
+            rec = Recognition(
+                model="paraformer-realtime-v2",
+                format="pcm",
+                sample_rate=SAMPLE_RATE,
+                api_key=API_KEY,
+                callback=CB(),
+            )
+            rec.start()
+            for chunk in audio_buffer:
+                try:
+                    rec.send_audio_frame(chunk)
+                except Exception:
+                    break
+            audio_buffer.clear()
+            all_sent.set()
             try:
-                rec.send_audio_frame(chunk)
+                rec.stop()
             except Exception:
-                break
-        audio_buffer.clear()
-        all_sent.set()  # 标记音频发送完毕，之后的结果才收
-        try:
-            rec.stop()
-        except Exception:
-            pass
-        done.wait(timeout=15)
+                pass
+            done.wait(timeout=15)
 
-        raw = "".join(result_sentences[k] for k in sorted(result_sentences))
-        if not raw:
-            self.overlay.hide()
-            print("（未识别到内容）")
-            return
+            raw = "".join(result_sentences[k] for k in sorted(result_sentences))
+            if not raw:
+                print("（未识别到内容）")
+                return
 
-        print(f"[ASR] {raw}")
-        self.overlay.show_polishing()
-        text = polish_text(raw)
-        self.overlay.hide()
-        print(f"[输入] {text}")
-        type_text(text)
+            print(f"[ASR] {raw}")
+            text = polish_text(raw)
+            print(f"[输入] {text}")
+            type_text(text)
 
     def start_recording(self):
-        with self._lock:
+        with self._record_lock:
             if self.is_recording:
                 return
             self.audio_buffer = []
@@ -263,14 +156,13 @@ class SpeechApp:
             )
             self.audio_stream.start()
             self.is_recording = True
-            self.overlay.show()
+            print("🎤 录音中…")
 
     def stop_recording(self):
-        with self._lock:
+        with self._record_lock:
             if not self.is_recording:
                 return
             self.is_recording = False
-            self.overlay.show_processing()
             if self.audio_stream:
                 self.audio_stream.stop()
                 self.audio_stream.close()
@@ -289,20 +181,15 @@ class SpeechApp:
 
 
 def main():
-    # 不显示 Dock 图标
     ns_app = AppKit.NSApplication.sharedApplication()
     ns_app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
 
-    overlay = OverlayController.alloc().init()
-    overlay.setup()
+    app = SpeechApp()
 
-    speech_app = SpeechApp(overlay)
-
-    # 键盘监听跑在子线程
     def run_keyboard():
         with keyboard.Listener(
-            on_press=speech_app._on_press,
-            on_release=speech_app._on_release,
+            on_press=app._on_press,
+            on_release=app._on_release,
         ) as listener:
             listener.join()
 
@@ -313,7 +200,6 @@ def main():
     print("  Ctrl+C 退出")
     print("=" * 42)
 
-    # 手动跑 run loop，每 100ms 回到 Python 一次，Ctrl+C 才能响应
     run_loop = Foundation.NSRunLoop.currentRunLoop()
     try:
         while True:
