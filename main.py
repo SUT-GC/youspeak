@@ -101,6 +101,8 @@ class SpeechApp:
             pass
         done.wait(timeout=15)
 
+        audio_buffer.clear()
+
         text = "".join(result_text)
         if text:
             print(f"[输入] {text}")
