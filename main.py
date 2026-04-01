@@ -6,7 +6,6 @@ YouSpeak - 语音输入工具
 
 import threading
 import time
-import signal
 import sys
 import os
 import numpy as np
@@ -132,9 +131,11 @@ class OverlayController(AppKit.NSObject):
     # --- 后台线程调用入口 ---
 
     def show(self):
+        print("[浮窗] show() 调用中...")
         self.performSelectorOnMainThread_withObject_waitUntilDone_(
-            b"doShow:", None, False
+            b"doShow:", None, True
         )
+        print("[浮窗] show() 完成")
 
     def show_processing(self):
         self.performSelectorOnMainThread_withObject_waitUntilDone_(
@@ -268,13 +269,7 @@ def main():
 
     speech_app = SpeechApp(overlay)
 
-    # Ctrl+C 退出
-    def handle_sigint(sig, frame):
-        print("\n再见！")
-        os._exit(0)
-    signal.signal(signal.SIGINT, handle_sigint)
-
-    # 键盘监听跑在子线程（NSApp 需要占用主线程）
+    # 键盘监听跑在子线程
     def run_keyboard():
         with keyboard.Listener(
             on_press=speech_app._on_press,
@@ -289,7 +284,13 @@ def main():
     print("  Ctrl+C 退出")
     print("=" * 42)
 
-    ns_app.run()
+    # 手动跑 run loop，每 100ms 回到 Python 一次，Ctrl+C 才能响应
+    run_loop = Foundation.NSRunLoop.currentRunLoop()
+    try:
+        while True:
+            run_loop.runUntilDate_(Foundation.NSDate.dateWithTimeIntervalSinceNow_(0.1))
+    except KeyboardInterrupt:
+        print("\n再见！")
 
 
 if __name__ == "__main__":
