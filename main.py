@@ -81,18 +81,14 @@ class OverlayController(AppKit.NSObject):
         panel.setOpaque_(False)
         panel.setAlphaValue_(0.95)
         panel.setHasShadow_(True)
-
-        # 系统 HUD 磨砂玻璃背景
-        effect = AppKit.NSVisualEffectView.alloc().initWithFrame_(
-            Foundation.NSMakeRect(0, 0, W, H)
+        panel.setBackgroundColor_(
+            AppKit.NSColor.colorWithRed_green_blue_alpha_(0.1, 0.1, 0.1, 0.9)
         )
-        effect.setMaterial_(AppKit.NSVisualEffectMaterialHUDWindow)
-        effect.setBlendingMode_(AppKit.NSVisualEffectBlendingModeBehindWindow)
-        effect.setState_(AppKit.NSVisualEffectStateActive)
-        effect.setWantsLayer_(True)
-        effect.layer().setCornerRadius_(12.0)
-        effect.layer().setMasksToBounds_(True)
-        panel.setContentView_(effect)
+
+        # 圆角
+        panel.contentView().setWantsLayer_(True)
+        panel.contentView().layer().setCornerRadius_(12.0)
+        panel.contentView().layer().setMasksToBounds_(True)
 
         # 文字标签
         label = AppKit.NSTextField.alloc().initWithFrame_(
@@ -106,7 +102,7 @@ class OverlayController(AppKit.NSObject):
         label.setDrawsBackground_(False)
         label.setTextColor_(AppKit.NSColor.whiteColor())
         label.setFont_(AppKit.NSFont.systemFontOfSize_(14))
-        effect.addSubview_(label)
+        panel.contentView().addSubview_(label)
 
         # 屏幕正中间（方便确认是否可见）
         screen = AppKit.NSScreen.mainScreen().frame()
@@ -116,6 +112,7 @@ class OverlayController(AppKit.NSObject):
 
         self._window = panel
         self._label = label
+        print(f"[浮窗] 初始化完成，位置=({x:.0f}, {y:.0f})")
 
     # --- 主线程 selector（方法名末尾 _ 对应 ObjC selector 的 :）---
 
