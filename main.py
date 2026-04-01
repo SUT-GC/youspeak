@@ -15,6 +15,7 @@ load_dotenv()
 
 import sounddevice as sd
 from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
+from dashscope import Generation
 from pynput import keyboard
 import objc
 import AppKit
@@ -44,6 +45,31 @@ def type_text(text: str):
         Quartz.CGEventKeyboardSetUnicodeString(ev_up, len(char), char)
         Quartz.CGEventPost(Quartz.kCGHIDEventTap, ev_up)
         time.sleep(0.004)
+
+
+def polish_text(raw: str) -> str:
+    """用 Qwen 润色 ASR 原始文本：修错别字、去重复、整理语义"""
+    try:
+        resp = Generation.call(
+            model="qwen-turbo",
+            api_key=API_KEY,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "你是语音识别文本的后处理助手。"
+                        "用户给你一段 ASR 原始输出，可能有错别字、重复词语或语义不通顺。"
+                        "请直接输出修正后的文本，不要解释，不要加任何前缀或后缀，保持原意，尽量少改动。"
+                    ),
+                },
+                {"role": "user", "content": raw},
+            ],
+        )
+        if resp.status_code == 200:
+            return resp.output.text.strip()
+    except Exception as e:
+        print(f"[润色失败] {e}")
+    return raw  # 失败则返回原始文本
 
 
 # -------- 浮窗（可覆盖全屏 App）--------
@@ -116,6 +142,9 @@ class OverlayController(AppKit.NSObject):
     def doShowProcessing_(self, _):
         self._label.setStringValue_("⏳  识别中…")
 
+    def doShowPolishing_(self, _):
+        self._label.setStringValue_("✨  润色中…")
+
     def doHide_(self, _):
         self._window.orderOut_(None)
 
@@ -131,6 +160,11 @@ class OverlayController(AppKit.NSObject):
     def show_processing(self):
         self.performSelectorOnMainThread_withObject_waitUntilDone_(
             b"doShowProcessing:", None, False
+        )
+
+    def show_polishing(self):
+        self.performSelectorOnMainThread_withObject_waitUntilDone_(
+            b"doShowPolishing:", None, False
         )
 
     def hide(self):
@@ -202,14 +236,18 @@ class SpeechApp:
             pass
         done.wait(timeout=15)
 
-        self.overlay.hide()
-
-        text = "".join(result_sentences[k] for k in sorted(result_sentences))
-        if text:
-            print(f"[输入] {text}")
-            type_text(text)
-        else:
+        raw = "".join(result_sentences[k] for k in sorted(result_sentences))
+        if not raw:
+            self.overlay.hide()
             print("（未识别到内容）")
+            return
+
+        print(f"[ASR] {raw}")
+        self.overlay.show_polishing()
+        text = polish_text(raw)
+        self.overlay.hide()
+        print(f"[输入] {text}")
+        type_text(text)
 
     def start_recording(self):
         with self._lock:
