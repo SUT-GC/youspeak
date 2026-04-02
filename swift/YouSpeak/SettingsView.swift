@@ -19,8 +19,7 @@ struct SettingsView: View {
     private var asrTab: some View {
         Form {
             Section("DashScope API") {
-                SecureField("API Key (sk-…)", text: $s.asrAPIKey)
-                    .textFieldStyle(.roundedBorder)
+                APIKeyField("API Key (sk-…)", text: $s.asrAPIKey)
                 Text("在 dashscope.console.aliyun.com 获取")
                     .font(.caption).foregroundColor(.secondary)
             }
@@ -44,13 +43,11 @@ struct SettingsView: View {
 
                 switch s.llmProvider {
                 case .qwen:
-                    SecureField("Qwen API Key", text: $s.qwenAPIKey)
-                        .textFieldStyle(.roundedBorder)
+                    APIKeyField("Qwen API Key", text: $s.qwenAPIKey)
                     TextField("模型 (默认 qwen-turbo)", text: $s.qwenModel)
                         .textFieldStyle(.roundedBorder)
                 case .doubao:
-                    SecureField("豆包 API Key", text: $s.doubaoAPIKey)
-                        .textFieldStyle(.roundedBorder)
+                    APIKeyField("豆包 API Key", text: $s.doubaoAPIKey)
                     TextField("模型 / Endpoint ID", text: $s.doubaoModel)
                         .textFieldStyle(.roundedBorder)
                 }
@@ -176,6 +173,82 @@ final class HotkeyCaptureView: NSView {
         case 62: return "右⌃"
         case 63: return "Fn"
         default: return ""
+        }
+    }
+}
+
+// MARK: - APIKeyField
+// SwiftUI's SecureField has a known paste bug on macOS.
+// This wraps NSTextField directly to get reliable ⌘V / right-click paste.
+
+struct APIKeyField: View {
+    private let placeholder: String
+    @Binding var text: String
+    @State private var isVisible = false
+
+    init(_ placeholder: String, text: Binding<String>) {
+        self.placeholder = placeholder
+        self._text = text
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if isVisible {
+                NativeTextField(placeholder: placeholder, text: $text, isSecure: false)
+                    .frame(height: 22)
+            } else {
+                NativeTextField(placeholder: placeholder, text: $text, isSecure: true)
+                    .frame(height: 22)
+            }
+            Button {
+                isVisible.toggle()
+            } label: {
+                Image(systemName: isVisible ? "eye.slash" : "eye")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(isVisible ? "隐藏" : "显示")
+        }
+    }
+}
+
+// NSViewRepresentable wrapper around NSTextField / NSSecureTextField.
+// Unlike SwiftUI's SecureField, these respond correctly to ⌘V and
+// right-click → Paste without any extra configuration.
+private struct NativeTextField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    let isSecure: Bool
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field: NSTextField = isSecure ? NSSecureTextField() : NSTextField()
+        field.placeholderString  = placeholder
+        field.isBordered         = true
+        field.bezelStyle         = .roundedBezel
+        field.delegate           = context.coordinator
+        field.stringValue        = text
+        field.cell?.isScrollable = true
+        field.cell?.wraps        = false
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        // Only update if text changed externally (avoid cursor-jump on every keystroke).
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        nsView.placeholderString = placeholder
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        @Binding var text: String
+        init(text: Binding<String>) { self._text = text }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            text = field.stringValue
         }
     }
 }
