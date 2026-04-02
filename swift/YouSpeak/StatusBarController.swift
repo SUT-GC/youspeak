@@ -28,25 +28,35 @@ final class StatusBarController {
         guard let button = item?.button else { return }
         switch state {
         case .idle:
-            button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "YouSpeak")
+            button.image           = NSImage(systemSymbolName: "mic",
+                                             accessibilityDescription: "YouSpeak")
             button.image?.isTemplate = true
+
         case .recording:
-            button.image = redMicImage()
+            button.image = recordingIcon()
+
         case .processing:
-            button.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "处理中")
+            button.image           = NSImage(systemSymbolName: "ellipsis.circle",
+                                             accessibilityDescription: "处理中")
             button.image?.isTemplate = true
         }
     }
 
-    private func redMicImage() -> NSImage? {
-        guard let sf = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "录音中") else { return nil }
-        let size = NSSize(width: 18, height: 18)
-        let img  = NSImage(size: size, flipped: false) { rect in
-            sf.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+    /// A mic.fill icon with a small red dot — drawn correctly (dot on top of mic).
+    private func recordingIcon() -> NSImage? {
+        let size: NSSize = NSSize(width: 18, height: 18)
+        return NSImage(size: size, flipped: false) { rect in
+            // 1. Draw mic first as a template (respects dark/light mode).
+            if let sf = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: nil) {
+                sf.isTemplate = true
+                sf.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+            }
+            // 2. Red dot on top to signal recording.
+            let dot = rect.insetBy(dx: rect.width * 0.55, dy: rect.height * 0.55)
+                          .offsetBy(dx: rect.width * 0.22, dy: -rect.height * 0.22)
             NSColor.systemRed.setFill()
-            NSBezierPath(ovalIn: rect.insetBy(dx: 6, dy: 6)).fill()
+            NSBezierPath(ovalIn: dot).fill()
             return true
         }
-        return img
     }
 }

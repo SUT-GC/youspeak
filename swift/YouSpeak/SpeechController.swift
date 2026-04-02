@@ -7,22 +7,22 @@ final class SpeechController: ObservableObject {
 
     enum State { case idle, recording, processing }
 
-    private let recorder  = AudioRecorder()
-    private let injector  = TextInjector()
-    private var inFlight  = false   // prevent concurrent transcriptions
+    private let recorder = AudioRecorder()
+    private let injector = TextInjector()
+    private var inFlight = false
 
     // MARK: - Hotkey actions
 
     func keyDown() {
         guard state == .idle else { return }
+        guard recorder.start() else { return }  // false = mic permission denied / engine error
         state = .recording
-        recorder.start()
     }
 
     func keyUp() {
         guard state == .recording else { return }
-        state = .processing
         let pcm = recorder.stop()
+        state = .processing
         Task { await transcribe(pcm) }
     }
 
@@ -30,8 +30,7 @@ final class SpeechController: ObservableObject {
 
     private func transcribe(_ pcm: Data) async {
         defer { state = .idle }
-        guard !pcm.isEmpty else { return }
-        guard !inFlight else { return }
+        guard !pcm.isEmpty, !inFlight else { return }
         inFlight = true
         defer { inFlight = false }
 
@@ -41,10 +40,9 @@ final class SpeechController: ObservableObject {
             return
         }
 
-        let asr = DashScopeASR(apiKey: s.asrAPIKey)
         let raw: String
         do {
-            raw = try await asr.transcribe(pcm)
+            raw = try await DashScopeASR(apiKey: s.asrAPIKey).transcribe(pcm)
         } catch {
             print("[YouSpeak] ASR error: \(error)")
             return
@@ -63,7 +61,7 @@ final class SpeechController: ObservableObject {
         }
         print("[输入] \(polished)")
 
-        // Inject on the main thread (CGEvent must be posted from a thread with a run loop)
-        await MainActor.run { injector.type(polished) }
+        // type() is @MainActor async — yields between chars instead of blocking.
+        await injector.type(polished)
     }
 }

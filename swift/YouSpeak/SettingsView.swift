@@ -6,8 +6,8 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            asrTab.tabItem   { Label("语音识别", systemImage: "mic") }
-            llmTab.tabItem   { Label("文本润色", systemImage: "wand.and.stars") }
+            asrTab.tabItem    { Label("语音识别", systemImage: "mic") }
+            llmTab.tabItem    { Label("文本润色", systemImage: "wand.and.stars") }
             hotkeyTab.tabItem { Label("快捷键",   systemImage: "keyboard") }
         }
         .padding()
@@ -77,13 +77,13 @@ struct SettingsView: View {
             .onTapGesture { isCapturing = true }
             .background(
                 HotkeyCapture(isActive: $isCapturing) { code, mods, label in
+                    // Only persist settings here. HotkeyManager is currently stopped
+                    // (AppDelegate stops it on openSettings); it will reload with the
+                    // new values when the settings window closes.
                     s.hotkeyCode      = Int(code)
                     s.hotkeyModifiers = mods.rawValue
                     s.hotkeyLabel     = label
                     isCapturing       = false
-                    // HotkeyManager was stopped when settings opened (AppDelegate).
-                    // reload() will restart it with the new key.
-                    AppDelegate.shared?.hotkeyManager.reload()
                 }
             )
 
@@ -94,10 +94,10 @@ struct SettingsView: View {
             }
 
             Button("重置为 右⌥") {
+                // Same: only update settings; reload happens on window close.
                 s.hotkeyCode      = 61
                 s.hotkeyModifiers = 0
                 s.hotkeyLabel     = "右⌥"
-                AppDelegate.shared?.hotkeyManager.reload()
             }
         }
         .padding()
@@ -119,11 +119,8 @@ private struct HotkeyCapture: NSViewRepresentable {
     func updateNSView(_ view: HotkeyCaptureView, context: Context) {
         if isActive {
             view.window?.makeFirstResponder(view)
-        } else {
-            // Resign so other controls can receive keyboard events normally.
-            if view.window?.firstResponder === view {
-                view.window?.makeFirstResponder(nil)
-            }
+        } else if view.window?.firstResponder === view {
+            view.window?.makeFirstResponder(nil)
         }
     }
 }
@@ -140,13 +137,12 @@ final class HotkeyCaptureView: NSView {
     }
 
     override func flagsChanged(with event: NSEvent) {
-        // Capture standalone modifier keys (e.g. right Option alone as hotkey).
         let code = CGKeyCode(event.keyCode)
         guard code != 0 else { return }
         let flags = CGEventFlags(rawValue: UInt64(event.modifierFlags.rawValue))
-        // Only fire when the modifier is being pressed, not when released.
+        // Only fire on key-down (flags becoming non-zero for this key).
         guard flags.rawValue != 0 else { return }
-        let label = modifierKeyLabel(keyCode: code, flags: event.modifierFlags)
+        let label = modifierLabel(keyCode: code)
         guard !label.isEmpty else { return }
         onCapture?(code, flags, label)
     }
@@ -166,13 +162,13 @@ final class HotkeyCaptureView: NSView {
         return parts.joined()
     }
 
-    /// Labels that distinguish left vs right modifier keys using the key code.
-    private func modifierKeyLabel(keyCode: CGKeyCode, flags: NSEvent.ModifierFlags) -> String {
+    /// Returns a label that distinguishes left vs right modifier keys by key code.
+    private func modifierLabel(keyCode: CGKeyCode) -> String {
         switch keyCode {
         case 54: return "右⌘"
         case 55: return "左⌘"
         case 56: return "左⇧"
-        case 57: return "⇪"    // Caps Lock
+        case 57: return "⇪"
         case 58: return "左⌥"
         case 59: return "左⌃"
         case 60: return "右⇧"

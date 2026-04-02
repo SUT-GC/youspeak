@@ -8,15 +8,15 @@ final class HotkeyManager {
     var onKeyDown: (() -> Void)?
     var onKeyUp:   (() -> Void)?
 
-    private var watchedKeyCode: CGKeyCode = 61
-    private var watchedModifierBit: CGEventFlags = .maskAlternate  // default: right Option
+    private var watchedKeyCode:     CGKeyCode    = 61
+    private var watchedModifierBit: CGEventFlags = .maskAlternate
     private var isDown = false
 
     func start() {
-        let code = CGKeyCode(SettingsManager.shared.hotkeyCode)
-        watchedKeyCode      = code
-        watchedModifierBit  = modifierBit(for: code)
-        isDown              = false
+        let code           = CGKeyCode(SettingsManager.shared.hotkeyCode)
+        watchedKeyCode     = code
+        watchedModifierBit = modifierBit(for: code)
+        isDown             = false
 
         let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
                               | (1 << CGEventType.keyDown.rawValue)
@@ -36,7 +36,7 @@ final class HotkeyManager {
             userInfo: ptr
         )
         guard let tap else {
-            print("[HotkeyManager] tapCreate failed — grant Accessibility permission in System Settings")
+            print("[HotkeyManager] tapCreate failed — grant Accessibility permission")
             return
         }
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
@@ -47,10 +47,14 @@ final class HotkeyManager {
     func stop() {
         if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
         if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
-        tap = nil; runLoopSource = nil
+        tap = nil
+        runLoopSource = nil
     }
 
+    /// Stop and restart with current SettingsManager values (picks up hotkey changes).
     func reload() { stop(); start() }
+
+    deinit { stop() }
 
     // MARK: - Event handling
 
@@ -59,8 +63,8 @@ final class HotkeyManager {
 
         switch type {
         case .flagsChanged where keyCode == watchedKeyCode:
-            // Use the specific modifier bit for this key rather than comparing raw values.
-            // e.g. right Option sets .maskAlternate; if the bit is set → pressed, else → released.
+            // Check the specific modifier bit for this key rather than comparing
+            // raw values, which is fragile when multiple modifiers are held.
             let pressed = event.flags.contains(watchedModifierBit)
             if pressed && !isDown {
                 isDown = true
@@ -69,7 +73,7 @@ final class HotkeyManager {
                 isDown = false
                 onKeyUp?()
             }
-            return nil  // swallow the event
+            return nil  // swallow
 
         case .keyDown where keyCode == watchedKeyCode:
             if !isDown { isDown = true; onKeyDown?() }
@@ -86,17 +90,15 @@ final class HotkeyManager {
 
     // MARK: - Helpers
 
-    /// Returns the CGEventFlags bit that corresponds to a modifier key code.
-    /// Non-modifier keys return an empty set (they use keyDown/keyUp instead).
     private func modifierBit(for keyCode: CGKeyCode) -> CGEventFlags {
         switch keyCode {
-        case 54, 55: return .maskCommand     // left/right Cmd
-        case 56, 60: return .maskShift       // left/right Shift
-        case 57:     return .maskAlphaShift  // Caps Lock
-        case 58, 61: return .maskAlternate   // left/right Option
-        case 59, 62: return .maskControl     // left/right Control
-        case 63:     return .maskSecondaryFn // Fn
-        default:     return []               // regular key → flagsChanged won't fire
+        case 54, 55: return .maskCommand
+        case 56, 60: return .maskShift
+        case 57:     return .maskAlphaShift
+        case 58, 61: return .maskAlternate
+        case 59, 62: return .maskControl
+        case 63:     return .maskSecondaryFn
+        default:     return []
         }
     }
 }

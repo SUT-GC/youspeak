@@ -2,13 +2,18 @@ import CoreGraphics
 import Foundation
 
 final class TextInjector {
-    func type(_ text: String) {
+
+    /// Types `text` at the current cursor position character by character.
+    /// Async so it yields the main actor between characters instead of blocking it.
+    @MainActor
+    func type(_ text: String) async {
         guard let src = CGEventSource(stateID: .hidSystemState) else { return }
         for char in text {
             let s = String(char)
             postChar(s, source: src, down: true)
             postChar(s, source: src, down: false)
-            Thread.sleep(forTimeInterval: 0.004)
+            // 4 ms gap — yield the main actor rather than blocking the thread.
+            try? await Task.sleep(nanoseconds: 4_000_000)
         }
     }
 

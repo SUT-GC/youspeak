@@ -28,7 +28,7 @@ enum LLMProvider: String, CaseIterable, Identifiable {
     var defaultModel: String {
         switch self {
         case .qwen:   return "qwen-turbo"
-        case .doubao: return ""   // 用户填 endpoint ID
+        case .doubao: return ""
         }
     }
 }
@@ -53,7 +53,6 @@ final class SettingsManager: ObservableObject {
         didSet { defaults.set(polishEnabled, forKey: "polishEnabled") }
     }
 
-    // Qwen
     @Published var qwenAPIKey: String {
         didSet { defaults.set(qwenAPIKey, forKey: "qwenAPIKey") }
     }
@@ -61,7 +60,6 @@ final class SettingsManager: ObservableObject {
         didSet { defaults.set(qwenModel, forKey: "qwenModel") }
     }
 
-    // Doubao
     @Published var doubaoAPIKey: String {
         didSet { defaults.set(doubaoAPIKey, forKey: "doubaoAPIKey") }
     }
@@ -81,18 +79,22 @@ final class SettingsManager: ObservableObject {
     }
 
     private init() {
-        asrAPIKey       = defaults.string(forKey: "asrAPIKey") ?? ""
-        llmProvider     = LLMProvider(rawValue: defaults.string(forKey: "llmProvider") ?? "") ?? .qwen
-        polishEnabled   = defaults.object(forKey: "polishEnabled") as? Bool ?? true
-        qwenAPIKey      = defaults.string(forKey: "qwenAPIKey") ?? ""
-        qwenModel       = defaults.string(forKey: "qwenModel") ?? "qwen-turbo"
-        doubaoAPIKey    = defaults.string(forKey: "doubaoAPIKey") ?? ""
-        doubaoModel     = defaults.string(forKey: "doubaoModel") ?? ""
-        hotkeyCode      = defaults.integer(forKey: "hotkeyCode") == 0
-                            ? 61 : defaults.integer(forKey: "hotkeyCode") // 默认右 Option
+        asrAPIKey     = defaults.string(forKey: "asrAPIKey")   ?? ""
+        llmProvider   = LLMProvider(rawValue: defaults.string(forKey: "llmProvider") ?? "") ?? .qwen
+        polishEnabled = defaults.object(forKey: "polishEnabled") as? Bool ?? true
+        qwenAPIKey    = defaults.string(forKey: "qwenAPIKey")  ?? ""
+        qwenModel     = defaults.string(forKey: "qwenModel")   ?? "qwen-turbo"
+        doubaoAPIKey  = defaults.string(forKey: "doubaoAPIKey") ?? ""
+        doubaoModel   = defaults.string(forKey: "doubaoModel") ?? ""
+
+        // Read once and apply default (61 = right Option) when no value has been stored.
+        let storedCode  = defaults.object(forKey: "hotkeyCode") as? Int
+        hotkeyCode      = storedCode ?? 61
         hotkeyModifiers = (defaults.object(forKey: "hotkeyModifiers") as? UInt64) ?? 0
-        hotkeyLabel     = defaults.string(forKey: "hotkeyLabel") ?? "右 ⌥"
+        hotkeyLabel     = defaults.string(forKey: "hotkeyLabel") ?? "右⌥"
     }
+
+    // MARK: Computed
 
     var currentLLMAPIKey: String {
         switch llmProvider {
