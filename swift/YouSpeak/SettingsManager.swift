@@ -21,6 +21,11 @@ final class SettingsManager: ObservableObject {
         didSet { defaults.set(qwenAPIKey, forKey: "qwenAPIKey") }
     }
 
+    // MARK: Debug
+    @Published var debugEnabled: Bool {
+        didSet { defaults.set(debugEnabled, forKey: "debugEnabled") }
+    }
+
     // MARK: Hotkey
     @Published var hotkeyCode: Int {
         didSet { defaults.set(hotkeyCode, forKey: "hotkeyCode") }
@@ -36,6 +41,7 @@ final class SettingsManager: ObservableObject {
         asrAPIKey     = defaults.string(forKey: "asrAPIKey") ?? ""
         polishEnabled = defaults.object(forKey: "polishEnabled") as? Bool ?? true
         qwenAPIKey    = defaults.string(forKey: "qwenAPIKey") ?? ""
+        debugEnabled  = defaults.object(forKey: "debugEnabled") as? Bool ?? false
 
         let storedCode  = defaults.object(forKey: "hotkeyCode") as? Int
         hotkeyCode      = storedCode ?? 61

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 
 extension Notification.Name {
     static let showSettingsTab = Notification.Name("com.youspeak.showSettingsTab")
@@ -357,32 +358,71 @@ private struct FeatureTile: View {
 
 private struct HistoryRow: View {
     let record: SpeechController.TranscriptionRecord
-    @State private var copied = false
+    @ObservedObject private var settings = SettingsManager.shared
+    @State private var copied    = false
+    @State private var isPlaying = false
+    @State private var player:   AVAudioPlayer?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(record.text)
-                    .font(.subheadline)
-                    .lineLimit(4)
-                    .textSelection(.enabled)
-                Text(record.date, style: .time)
-                    .font(.caption2)
-                    .foregroundStyle(Color(NSColor.tertiaryLabelColor))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(record.text)
+                        .font(.subheadline)
+                        .lineLimit(4)
+                        .textSelection(.enabled)
+                    Text(record.date, style: .time)
+                        .font(.caption2)
+                        .foregroundStyle(Color(NSColor.tertiaryLabelColor))
+                }
+                Spacer(minLength: 8)
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(record.text, forType: .string)
+                    copied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+                } label: {
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 13))
+                        .foregroundStyle(copied ? Color.green : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("复制文字")
             }
-            Spacer(minLength: 8)
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(record.text, forType: .string)
-                copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 13))
-                    .foregroundStyle(copied ? Color.green : Color.secondary)
+
+            if settings.debugEnabled, record.rawText != record.text {
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform").font(.caption2)
+                    Text("ASR 原文：\(record.rawText)")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                }
             }
-            .buttonStyle(.plain)
-            .help("复制文字")
+
+            if settings.debugEnabled, let url = record.audioURL {
+                Button {
+                    if isPlaying {
+                        player?.stop()
+                        isPlaying = false
+                    } else {
+                        player = try? AVAudioPlayer(contentsOf: url)
+                        player?.play()
+                        isPlaying = true
+                        // Reset flag when playback finishes
+                        let duration = player?.duration ?? 0
+                        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1) {
+                            isPlaying = false
+                        }
+                    }
+                } label: {
+                    Label(isPlaying ? "停止" : "播放录音",
+                          systemImage: isPlaying ? "stop.fill" : "play.fill")
+                        .font(.caption)
+                        .foregroundStyle(isPlaying ? Color.red : Color.secondary)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(12)
         .background(

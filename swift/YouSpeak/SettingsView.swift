@@ -51,6 +51,26 @@ struct SettingsView: View {
                     .font(.caption)
             }
             .foregroundStyle(.secondary)
+
+            Divider()
+
+            Toggle(isOn: $s.debugEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("调试模式").font(.subheadline.bold())
+                    Text("录音自动保存为 WAV，历史页可播放对比")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            if !SpeechController.shared.history.isEmpty || s.debugEnabled {
+                Button(role: .destructive) {
+                    SpeechController.shared.clearHistory()
+                } label: {
+                    Label("清理所有历史与音频缓存", systemImage: "trash")
+                        .font(.subheadline)
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .padding(16)
     }
