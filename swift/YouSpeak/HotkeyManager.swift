@@ -1,9 +1,11 @@
+import ApplicationServices
 import CoreGraphics
 import Foundation
 
 final class HotkeyManager {
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var retryTimer: Timer?
 
     var onKeyDown: (() -> Void)?
     var onKeyUp:   (() -> Void)?
@@ -12,18 +14,27 @@ final class HotkeyManager {
     private var watchedModifierBit: CGEventFlags = .maskAlternate
     private var isDown = false
 
+    // MARK: - Public
+
     func start() {
-        let code           = CGKeyCode(SettingsManager.shared.hotkeyCode)
-        watchedKeyCode     = code
-        watchedModifierBit = modifierBit(for: code)
+        stop()  // clean up any previous tap first
+
+        watchedKeyCode     = CGKeyCode(SettingsManager.shared.hotkeyCode)
+        watchedModifierBit = modifierBit(for: watchedKeyCode)
         isDown             = false
+
+        guard AXIsProcessTrusted() else {
+            print("[HotkeyManager] ⚠️  No Accessibility permission — will retry every 2s")
+            scheduleRetry()
+            return
+        }
 
         let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
                               | (1 << CGEventType.keyDown.rawValue)
                               | (1 << CGEventType.keyUp.rawValue)
 
         let ptr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-        tap = CGEvent.tapCreate(
+        let newTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
@@ -35,26 +46,46 @@ final class HotkeyManager {
             },
             userInfo: ptr
         )
-        guard let tap else {
-            print("[HotkeyManager] tapCreate failed — grant Accessibility permission")
+        guard let newTap else {
+            print("[HotkeyManager] ❌ tapCreate failed (returned nil) — will retry")
+            scheduleRetry()
             return
         }
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+
+        tap = newTap
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, newTap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        CGEvent.tapEnable(tap: newTap, enable: true)
+        print("[HotkeyManager] ✅ tap active — watching keyCode \(watchedKeyCode)")
     }
 
     func stop() {
+        retryTimer?.invalidate()
+        retryTimer = nil
         if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
         if let src = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), src, .commonModes) }
         tap = nil
         runLoopSource = nil
     }
 
-    /// Stop and restart with current SettingsManager values (picks up hotkey changes).
     func reload() { stop(); start() }
 
     deinit { stop() }
+
+    // MARK: - Retry
+
+    private func scheduleRetry() {
+        retryTimer?.invalidate()
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            if AXIsProcessTrusted() {
+                print("[HotkeyManager] 🔓 Accessibility granted — starting tap")
+                self.retryTimer?.invalidate()
+                self.retryTimer = nil
+                self.start()
+            }
+        }
+    }
 
     // MARK: - Event handling
 
@@ -63,24 +94,32 @@ final class HotkeyManager {
 
         switch type {
         case .flagsChanged where keyCode == watchedKeyCode:
-            // Check the specific modifier bit for this key rather than comparing
-            // raw values, which is fragile when multiple modifiers are held.
             let pressed = event.flags.contains(watchedModifierBit)
             if pressed && !isDown {
                 isDown = true
+                print("[HotkeyManager] keyDown (flagsChanged) code=\(keyCode)")
                 onKeyDown?()
             } else if !pressed && isDown {
                 isDown = false
+                print("[HotkeyManager] keyUp (flagsChanged) code=\(keyCode)")
                 onKeyUp?()
             }
             return nil  // swallow
 
         case .keyDown where keyCode == watchedKeyCode:
-            if !isDown { isDown = true; onKeyDown?() }
+            if !isDown {
+                isDown = true
+                print("[HotkeyManager] keyDown code=\(keyCode)")
+                onKeyDown?()
+            }
             return nil
 
         case .keyUp where keyCode == watchedKeyCode:
-            if isDown { isDown = false; onKeyUp?() }
+            if isDown {
+                isDown = false
+                print("[HotkeyManager] keyUp code=\(keyCode)")
+                onKeyUp?()
+            }
             return nil
 
         default:
@@ -88,7 +127,7 @@ final class HotkeyManager {
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Modifier bit map
 
     private func modifierBit(for keyCode: CGKeyCode) -> CGEventFlags {
         switch keyCode {
