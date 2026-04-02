@@ -96,6 +96,18 @@ final class HotkeyManager {
     // MARK: - Event handling
 
     private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        switch type {
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            // macOS disabled the tap (e.g. callback was slow). Re-enable it and
+            // synthesise a key-up so recording doesn't get stuck.
+            log.warning("Tap disabled (\(type.rawValue, privacy: .public)) — re-enabling")
+            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
+            if isDown { isDown = false; onKeyUp?() }
+            return nil
+
+        default: break
+        }
+
         let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
 
         switch type {

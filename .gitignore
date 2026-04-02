@@ -1,4 +1,13 @@
-.venv/
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+swift/build/
+
+# macOS
+.DS_Store
+
+# Secrets
+*.p8
+*.p12
 .env
-__pycache__/
-*.pyc

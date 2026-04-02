@@ -1,6 +1,0 @@
-dashscope
-sounddevice
-numpy
-pynput
-pyobjc-framework-Quartz
-python-dotenv
