@@ -1,0 +1,270 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F001 /* AppDelegate.swift */; };
+		A002 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = F002 /* AudioRecorder.swift */; };
+		A003 /* DashScopeASR.swift in Sources */ = {isa = PBXBuildFile; fileRef = F003 /* DashScopeASR.swift */; };
+		A004 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F004 /* HotkeyManager.swift */; };
+		A005 /* LLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F005 /* LLMService.swift */; };
+		A006 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F006 /* SettingsManager.swift */; };
+		A007 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F007 /* SettingsView.swift */; };
+		A008 /* SpeechController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F008 /* SpeechController.swift */; };
+		A009 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F009 /* StatusBarController.swift */; };
+		A010 /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010 /* TextInjector.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F002 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
+		F003 /* DashScopeASR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashScopeASR.swift; sourceTree = "<group>"; };
+		F004 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyManager.swift; sourceTree = "<group>"; };
+		F005 /* LLMService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMService.swift; sourceTree = "<group>"; };
+		F006 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		F007 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F008 /* SpeechController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechController.swift; sourceTree = "<group>"; };
+		F009 /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
+		F010 /* TextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjector.swift; sourceTree = "<group>"; };
+		F011 /* YouSpeak.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YouSpeak.entitlements; sourceTree = "<group>"; };
+		F012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		PROD /* YouSpeak.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YouSpeak.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		ROOT = {
+			isa = PBXGroup;
+			children = (
+				GRP1 /* YouSpeak */,
+				GRP2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		GRP1 /* YouSpeak */ = {
+			isa = PBXGroup;
+			children = (
+				F001 /* AppDelegate.swift */,
+				F002 /* AudioRecorder.swift */,
+				F003 /* DashScopeASR.swift */,
+				F004 /* HotkeyManager.swift */,
+				F005 /* LLMService.swift */,
+				F006 /* SettingsManager.swift */,
+				F007 /* SettingsView.swift */,
+				F008 /* SpeechController.swift */,
+				F009 /* StatusBarController.swift */,
+				F010 /* TextInjector.swift */,
+				F011 /* YouSpeak.entitlements */,
+				F012 /* Info.plist */,
+			);
+			path = YouSpeak;
+			sourceTree = "<group>";
+		};
+		GRP2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				PROD /* YouSpeak.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		TGT1 /* YouSpeak */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BCL1 /* Build configuration list for PBXNativeTarget "YouSpeak" */;
+			buildPhases = (
+				BPH1 /* Sources */,
+				BPH2 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = YouSpeak;
+			productName = YouSpeak;
+			productReference = PROD /* YouSpeak.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PROJ /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					TGT1 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = BCL0 /* Build configuration list for PBXProject "YouSpeak" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = zh_CN;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = ROOT;
+			productRefGroup = GRP2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				TGT1 /* YouSpeak */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BPH1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A001 /* AppDelegate.swift in Sources */,
+				A002 /* AudioRecorder.swift in Sources */,
+				A003 /* DashScopeASR.swift in Sources */,
+				A004 /* HotkeyManager.swift in Sources */,
+				A005 /* LLMService.swift in Sources */,
+				A006 /* SettingsManager.swift in Sources */,
+				A007 /* SettingsView.swift in Sources */,
+				A008 /* SpeechController.swift in Sources */,
+				A009 /* StatusBarController.swift in Sources */,
+				A010 /* TextInjector.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BPH2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		BC00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		BC01 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		BC10 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = YouSpeak/YouSpeak.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = YouSpeak/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourname.youspeak";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Debug;
+		};
+		BC11 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = YouSpeak/YouSpeak.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = YouSpeak/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.yourname.youspeak";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BCL0 /* Build configuration list for PBXProject "YouSpeak" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC00 /* Debug */,
+				BC01 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BCL1 /* Build configuration list for PBXNativeTarget "YouSpeak" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC10 /* Debug */,
+				BC11 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = PROJ /* Project object */;
+}
