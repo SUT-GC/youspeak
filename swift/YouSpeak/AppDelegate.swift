@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-@main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -15,9 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
-
-        // Show in Dock so the app is easy to find.
-        NSApp.setActivationPolicy(.regular)
 
         statusBar.setup(controller: speechController)
 

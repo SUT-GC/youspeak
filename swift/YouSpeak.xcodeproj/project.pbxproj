@@ -18,6 +18,7 @@
 		A009 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F009 /* StatusBarController.swift */; };
 		A010 /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F010 /* TextInjector.swift */; };
 		A011 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F013 /* MainView.swift */; };
+		A012 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = F014 /* main.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +35,7 @@
 		F011 /* YouSpeak.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = YouSpeak.entitlements; sourceTree = "<group>"; };
 		F012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F013 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		F014 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		PROD /* YouSpeak.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = YouSpeak.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -64,6 +66,7 @@
 				F011 /* YouSpeak.entitlements */,
 				F012 /* Info.plist */,
 				F013 /* MainView.swift */,
+				F014 /* main.swift */,
 			);
 			path = YouSpeak;
 			sourceTree = "<group>";
@@ -153,6 +156,7 @@
 				A009 /* StatusBarController.swift in Sources */,
 				A010 /* TextInjector.swift in Sources */,
 			A011 /* MainView.swift in Sources */,
+			A012 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
