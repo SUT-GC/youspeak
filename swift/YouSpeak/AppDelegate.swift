@@ -2,12 +2,13 @@ import AppKit
 import SwiftUI
 
 @main
+@MainActor  // All NSApplicationDelegate callbacks run on main; make it explicit.
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     static weak var shared: AppDelegate?
 
     let hotkeyManager    = HotkeyManager()
-    @MainActor lazy var speechController = SpeechController()
+    let speechController = SpeechController()
     private let statusBar = StatusBarController()
     private var settingsWindow: NSWindow?
 
@@ -17,19 +18,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // No Dock icon
         NSApp.setActivationPolicy(.accessory)
 
-        // Status bar
         statusBar.setup(controller: speechController)
 
-        // Hotkey
         hotkeyManager.onKeyDown = { [weak self] in
-            Task { @MainActor in self?.speechController.keyDown() }
+            self?.speechController.keyDown()
         }
         hotkeyManager.onKeyUp = { [weak self] in
-            Task { @MainActor in self?.speechController.keyUp() }
+            self?.speechController.keyUp()
         }
         hotkeyManager.start()
 
-        // Ask for accessibility if needed
+        // Prompt for Accessibility permission on first launch.
         let opts: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
         AXIsProcessTrustedWithOptions(opts)
     }
@@ -42,15 +41,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let w = NSWindow(
             contentRect: .zero,
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
+            styleMask:   [.titled, .closable],
+            backing:     .buffered,
+            defer:       false
         )
         w.title = "YouSpeak 设置"
         w.contentView = NSHostingView(rootView: SettingsView())
         w.center()
         w.isReleasedWhenClosed = false
         settingsWindow = w
+
+        // Pause hotkey while settings window is open so key capture doesn't trigger recording.
+        hotkeyManager.stop()
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object:  w,
+            queue:   .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.hotkeyManager.start() }
+        }
+
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

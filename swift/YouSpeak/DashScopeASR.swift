@@ -3,199 +3,191 @@ import Foundation
 /// Wraps DashScope Paraformer realtime ASR via the WebSocket JSON protocol.
 final class DashScopeASR {
     private let apiKey: String
-    private var ws: URLSessionWebSocketTask?
-    private var session: URLSession?
 
-    private var taskID: String = ""
-    private var resultBuffer: [Int: String] = [:]
-    private var completion: ((Result<String, Error>) -> Void)?
-    private var allAudioSent = false
-
-    init(apiKey: String) {
-        self.apiKey = apiKey
-    }
+    init(apiKey: String) { self.apiKey = apiKey }
 
     // MARK: - Public
 
-    /// Transcribes raw PCM Int16 / 16 kHz / mono audio data.
     func transcribe(_ pcmData: Data) async throws -> String {
         try await withCheckedThrowingContinuation { cont in
-            self.run(pcmData: pcmData) { result in
-                cont.resume(with: result)
-            }
+            Session(apiKey: apiKey, pcmData: pcmData) { cont.resume(with: $0) }.start()
         }
     }
 
-    // MARK: - Internal
+    // MARK: - Inner session (one-shot, owns its own state)
 
-    private func run(pcmData: Data, completion: @escaping (Result<String, Error>) -> Void) {
-        self.completion = completion
-        resultBuffer    = [:]
-        allAudioSent    = false
-        taskID          = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-                                           .lowercased()
-                                           .prefix(32)
-                                           .description
+    private final class Session {
+        private let apiKey:    String
+        private let pcmData:   Data
+        private let onFinish:  (Result<String, Error>) -> Void
 
-        let url = URL(string: "wss://dashscope.aliyuncs.com/api-ws/v1/inference")!
-        var req = URLRequest(url: url)
-        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        req.setValue("enable", forHTTPHeaderField: "X-DashScope-DataInspection")
+        private var ws:           URLSessionWebSocketTask?
+        private var urlSession:   URLSession?
+        private var results:      [Int: String] = [:]
+        private var finished      = false
 
-        let cfg = URLSessionConfiguration.default
-        session = URLSession(configuration: cfg)
-        ws = session?.webSocketTask(with: req)
-        ws?.resume()
-
-        // Send run-task command
-        let runTask = buildRunTask()
-        ws?.send(.string(runTask)) { [weak self] err in
-            guard let self, err == nil else {
-                completion(.failure(err ?? ASRError.sendFailed))
-                return
-            }
-            self.receiveLoop()
+        // Protects `allAudioSent` which is written from a send-callback thread
+        // and read from a receive-callback thread.
+        private let lock          = NSLock()
+        private var _allAudioSent = false
+        private var allAudioSent: Bool {
+            get { lock.withLock { _allAudioSent } }
+            set { lock.withLock { _allAudioSent = newValue } }
         }
 
-        // Wait for task-started before sending audio
-        // We'll send audio after receiving task-started in receiveLoop
-        _ = pcmData  // stored via closure capture below
-        self.pendingPCM = pcmData
-    }
+        private let taskID: String = {
+            UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        }()
 
-    private var pendingPCM: Data = Data()
-
-    private func sendAudio() {
-        let chunkSize = 3200 * 2  // 200 ms @ 16kHz Int16 = 6400 bytes
-        var offset = 0
-        let data = pendingPCM
-        let group = DispatchGroup()
-
-        func sendNext() {
-            guard offset < data.count else {
-                // send finish command
-                allAudioSent = true
-                let finish = buildFinishTask()
-                ws?.send(.string(finish)) { _ in }
-                return
-            }
-            let end   = min(offset + chunkSize, data.count)
-            let chunk = data[offset..<end]
-            offset = end
-
-            group.enter()
-            ws?.send(.data(chunk)) { _ in
-                group.leave()
-                group.notify(queue: .global()) { sendNext() }
-            }
+        init(apiKey: String, pcmData: Data, onFinish: @escaping (Result<String, Error>) -> Void) {
+            self.apiKey   = apiKey
+            self.pcmData  = pcmData
+            self.onFinish = onFinish
         }
-        sendNext()
-    }
 
-    private func receiveLoop() {
-        ws?.receive { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .failure(let err):
-                self.finish(.failure(err))
-            case .success(let msg):
-                self.handle(message: msg)
+        func start() {
+            let url = URL(string: "wss://dashscope.aliyuncs.com/api-ws/v1/inference")!
+            var req = URLRequest(url: url)
+            req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+            urlSession = URLSession(configuration: .default)
+            ws = urlSession!.webSocketTask(with: req)
+            ws!.resume()
+
+            ws!.send(.string(buildRunTask())) { [weak self] err in
+                guard let self else { return }
+                if let err { self.complete(.failure(err)); return }
                 self.receiveLoop()
             }
         }
-    }
 
-    private func handle(message: URLSessionWebSocketTask.Message) {
-        guard case .string(let text) = message,
-              let data = text.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return }
+        // MARK: - Receive loop
 
-        let header = json["header"] as? [String: Any]
-        let event  = header?["event"] as? String ?? ""
-
-        switch event {
-        case "task-started":
-            sendAudio()
-
-        case "result-generated":
-            guard allAudioSent else { return }  // ignore intermediate results
-            if let payload = json["payload"] as? [String: Any],
-               let output  = payload["output"]  as? [String: Any],
-               let sentence = output["sentence"] as? [String: Any],
-               let text     = sentence["text"]   as? String,
-               let endTime  = sentence["end_time"] as? Int,
-               endTime > 0
-            {
-                let sid = sentence["sentence_id"] as? Int ?? resultBuffer.count
-                resultBuffer[sid] = text
+        private func receiveLoop() {
+            ws?.receive { [weak self] result in
+                guard let self else { return }
+                switch result {
+                case .failure(let err):
+                    // Error after finish is normal (ws cancelled); ignore it.
+                    if !self.finished { self.complete(.failure(err)) }
+                case .success(let msg):
+                    self.handle(msg)
+                    if !self.finished { self.receiveLoop() }
+                }
             }
+        }
 
-        case "task-finished":
-            let combined = resultBuffer
-                .sorted { $0.key < $1.key }
-                .map(\.value)
-                .joined()
-            finish(.success(combined))
+        private func handle(_ msg: URLSessionWebSocketTask.Message) {
+            guard case .string(let text) = msg,
+                  let data = text.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let header = json["header"] as? [String: Any],
+                  let event  = header["event"] as? String
+            else { return }
 
-        case "task-failed":
-            let msg = (json["payload"] as? [String: Any])?["message"] as? String ?? "ASR failed"
-            finish(.failure(ASRError.taskFailed(msg)))
+            switch event {
+            case "task-started":
+                sendAllAudio()
 
-        default:
-            break
+            case "result-generated":
+                // Ignore intermediate results; only collect after all audio is flushed.
+                guard allAudioSent else { return }
+                guard let payload  = json["payload"]  as? [String: Any],
+                      let output   = payload["output"] as? [String: Any],
+                      let sentence = output["sentence"] as? [String: Any],
+                      let txt      = sentence["text"]   as? String,
+                      (sentence["end_time"] as? Int ?? 0) > 0
+                else { return }
+                let sid = sentence["sentence_id"] as? Int ?? results.count
+                results[sid] = txt
+
+            case "task-finished":
+                let combined = results.sorted { $0.key < $1.key }.map(\.value).joined()
+                complete(.success(combined))
+
+            case "task-failed":
+                let msg = (json["payload"] as? [String: Any])?["message"] as? String ?? "ASR task failed"
+                complete(.failure(ASRError.taskFailed(msg)))
+
+            default: break
+            }
+        }
+
+        // MARK: - Send audio
+
+        private func sendAllAudio() {
+            let chunkSize = 6400  // 200 ms @ 16 kHz Int16 mono
+            let data      = pcmData
+            var offset    = 0
+
+            func sendNext() {
+                guard offset < data.count else {
+                    // All chunks sent — tell server we're done.
+                    allAudioSent = true
+                    ws?.send(.string(buildFinishTask())) { _ in }
+                    return
+                }
+                let end   = min(offset + chunkSize, data.count)
+                let chunk = data[offset..<end]
+                offset = end
+                ws?.send(.data(chunk)) { _ in sendNext() }
+            }
+            sendNext()
+        }
+
+        // MARK: - Completion
+
+        private func complete(_ result: Result<String, Error>) {
+            guard !finished else { return }
+            finished = true
+            ws?.cancel()
+            ws = nil
+            onFinish(result)
+        }
+
+        // MARK: - Message builders
+
+        private func buildRunTask() -> String {
+            // Correct flat structure per DashScope WebSocket API spec.
+            let obj: [String: Any] = [
+                "header": [
+                    "action":    "run-task",
+                    "task_id":   taskID,
+                    "streaming": "duplex"
+                ],
+                "payload": [
+                    "task_group": "audio",
+                    "task":       "asr",
+                    "function":   "recognition",
+                    "model":      "paraformer-realtime-v2",
+                    "parameters": [
+                        "format":      "pcm",
+                        "sample_rate": 16000
+                    ],
+                    "input": [String: Any]()
+                ]
+            ]
+            return jsonString(obj)
+        }
+
+        private func buildFinishTask() -> String {
+            let obj: [String: Any] = [
+                "header": [
+                    "action":    "finish-task",
+                    "task_id":   taskID,
+                    "streaming": "duplex"
+                ],
+                "payload": ["input": [String: Any]()]
+            ]
+            return jsonString(obj)
+        }
+
+        private func jsonString(_ obj: Any) -> String {
+            (try? String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)) ?? "{}"
         }
     }
 
-    private func finish(_ result: Result<String, Error>) {
-        ws?.cancel()
-        ws = nil
-        let cb = completion
-        completion = nil
-        cb?(result)
-    }
-
-    // MARK: - Message builders
-
-    private func buildRunTask() -> String {
-        let obj: [String: Any] = [
-            "header": [
-                "action":     "run-task",
-                "task_id":    taskID,
-                "streaming":  "duplex"
-            ],
-            "payload": [
-                "task": [
-                    "task": "asr",
-                    "function": "recognition",
-                    "model": "paraformer-realtime-v2"
-                ],
-                "parameters": [
-                    "format": "pcm",
-                    "sample_rate": 16000
-                ],
-                "input": [String: Any]()
-            ]
-        ]
-        return (try? String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)) ?? "{}"
-    }
-
-    private func buildFinishTask() -> String {
-        let obj: [String: Any] = [
-            "header": [
-                "action":  "finish-task",
-                "task_id": taskID,
-                "streaming": "duplex"
-            ],
-            "payload": [
-                "input": [String: Any]()
-            ]
-        ]
-        return (try? String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)) ?? "{}"
-    }
-
     enum ASRError: Error {
-        case sendFailed
         case taskFailed(String)
     }
 }

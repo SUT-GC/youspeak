@@ -22,7 +22,5 @@
 	<string>APPL</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
-	<key>NSPrincipalClass</key>
-	<string>AppDelegate</string>
 </dict>
 </plist>
