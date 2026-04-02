@@ -96,9 +96,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Settings window
 
     @objc func openSettings() {
-        // Always stop the hotkey tap — whether the window is new or reused.
-        hotkeyManager.stop()
-
         if let w = settingsWindow {
             w.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -113,19 +110,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         w.title                = "YouSpeak 设置"
         w.contentView          = NSHostingView(rootView: SettingsView())
         w.isReleasedWhenClosed = false
+        w.delegate             = self
         w.center()
         settingsWindow = w
-
-        hotkeyManager.stop()
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object:  w,
-            queue:   .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.hotkeyManager.reload() }
-        }
-
         w.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - NSWindowDelegate (settings window focus tracking)
+//
+// Stop the hotkey only while the settings window IS the key window so the
+// user can type / paste in it without accidentally triggering recording.
+// Resume the moment the user switches away — even if they never close the window.
+
+extension AppDelegate: NSWindowDelegate {
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard notification.object as? NSWindow === settingsWindow else { return }
+        hotkeyManager.stop()
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        guard notification.object as? NSWindow === settingsWindow else { return }
+        hotkeyManager.reload()
     }
 }
