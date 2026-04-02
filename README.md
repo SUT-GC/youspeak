@@ -2,7 +2,7 @@
 
 macOS 语音输入工具，按住快捷键说话，文字实时打到光标位置。支持任意输入框，包括浏览器。
 
-**[下载 DMG](https://github.com/SUT-GC/youspeak/releases/tag/1.0/YouSpeak.zip)** · [主页](https://sut-gc.github.io/youspeak/)
+**[下载 DMG](https://github.com/SUT-GC/youspeak/releases/latest/download/YouSpeak.dmg)** · [主页](https://sut-gc.github.io/youspeak/)
 
 ## 特性
 
