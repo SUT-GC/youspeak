@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
 
+        setupMainMenu()
         statusBar.setup(controller: speechController)
 
         hotkeyManager.onKeyDown = { [weak self] in self?.speechController.keyDown() }
@@ -24,8 +25,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let opts: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
         AXIsProcessTrustedWithOptions(opts)
 
-        // Show the main window on every launch.
         showMain()
+    }
+
+    // MARK: - Main menu
+    // macOS dispatches ⌘V/⌘C/⌘X by scanning the main menu for matching
+    // key equivalents. Without an Edit menu these shortcuts never reach
+    // text fields, so paste appears broken even though the field works fine.
+    private func setupMainMenu() {
+        let bar = NSMenu()
+
+        // App menu
+        let appItem = NSMenuItem()
+        bar.addItem(appItem)
+        let appMenu = NSMenu()
+        appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "关于 YouSpeak",
+                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "退出 YouSpeak",
+                        action: #selector(NSApplication.terminate(_:)),
+                        keyEquivalent: "q")
+
+        // Edit menu — this is what makes ⌘V / ⌘C / ⌘X work in text fields
+        let editItem = NSMenuItem()
+        bar.addItem(editItem)
+        let editMenu = NSMenu(title: "编辑")
+        editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "撤销", action: Selector(("undo:")),            keyEquivalent: "z")
+        editMenu.addItem(withTitle: "重做", action: Selector(("redo:")),            keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "剪切", action: #selector(NSText.cut(_:)),       keyEquivalent: "x")
+        editMenu.addItem(withTitle: "拷贝", action: #selector(NSText.copy(_:)),      keyEquivalent: "c")
+        editMenu.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)),     keyEquivalent: "v")
+        editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        NSApp.mainMenu = bar
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
@@ -60,6 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Settings window
 
     @objc func openSettings() {
+        // Always stop the hotkey tap — whether the window is new or reused.
+        hotkeyManager.stop()
+
         if let w = settingsWindow {
             w.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
