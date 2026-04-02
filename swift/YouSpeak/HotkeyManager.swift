@@ -32,13 +32,6 @@ final class HotkeyManager {
         watchedModifierBit = modifierBit(for: watchedKeyCode)
         isDown             = false
 
-        guard AXIsProcessTrusted() else {
-            log.warning("No Accessibility permission — retrying every 2s")
-            isActive = false
-            scheduleRetry()
-            return
-        }
-
         let mask: CGEventMask = (1 << CGEventType.flagsChanged.rawValue)
                               | (1 << CGEventType.keyDown.rawValue)
                               | (1 << CGEventType.keyUp.rawValue)
@@ -57,8 +50,11 @@ final class HotkeyManager {
             userInfo: ptr
         )
 
+        // tapCreate returns nil when accessibility permission is missing.
+        // Don't gate on AXIsProcessTrusted() first — the tap result is authoritative.
         guard let newTap else {
-            log.error("tapCreate returned nil even with permission — retrying")
+            let trusted = AXIsProcessTrusted()
+            log.warning("tapCreate failed (AXIsProcessTrusted=\(trusted, privacy: .public)) — retrying every 2s")
             isActive = false
             scheduleRetry()
             return
