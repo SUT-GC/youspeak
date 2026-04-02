@@ -10,18 +10,21 @@ final class LLMService {
         请直接输出修正后的文本，不要解释，不要加任何前缀或后缀，保持原意，尽量少改动。
         """
 
+    private static let endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    private static let model    = "qwen-turbo"
+
     func polish(_ raw: String) async throws -> String {
         let s = SettingsManager.shared
-        guard !s.currentLLMAPIKey.isEmpty else { return raw }
+        guard !s.qwenAPIKey.isEmpty else { return raw }
 
-        let url = URL(string: s.llmProvider.endpoint)!
+        let url = URL(string: Self.endpoint)!
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
-        req.setValue("Bearer \(s.currentLLMAPIKey)", forHTTPHeaderField: "Authorization")
+        req.setValue("Bearer \(s.qwenAPIKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body: [String: Any] = [
-            "model": s.currentLLMModel,
+            "model": Self.model,
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user",   "content": raw]

@@ -26,7 +26,13 @@ cd swift
 xcodebuild -project YouSpeak.xcodeproj -scheme YouSpeak -configuration Debug build
 ```
 
-Requires: Xcode 15+, macOS 12+.
+To build and notarize a release DMG:
+
+```bash
+cd swift && ./release.sh
+```
+
+Requires: Xcode 15+, macOS 13+.
 
 The app needs two permissions granted at first launch:
 - **Microphone** — for audio capture
@@ -67,7 +73,8 @@ Key files:
 - [TextInjector.swift](swift/YouSpeak/TextInjector.swift) — sends CGEvent keystrokes; requires Accessibility permission
 - [HotkeyManager.swift](swift/YouSpeak/HotkeyManager.swift) — global CGEvent tap; suppresses the key from reaching other apps; auto-retries if accessibility denied
 - [SettingsManager.swift](swift/YouSpeak/SettingsManager.swift) — `UserDefaults` wrapper; source of truth for all runtime config
-- [AppDelegate.swift](swift/YouSpeak/AppDelegate.swift) — menubar icon, window management, wires everything together
+- [StatusBarController.swift](swift/YouSpeak/StatusBarController.swift) — menubar icon rendering; observes `SpeechController.$state` via Combine to update icon (idle/recording/processing)
+- [AppDelegate.swift](swift/YouSpeak/AppDelegate.swift) — app entry point; wires all components together, owns the Settings window
 
 ## Concurrency Model (Swift)
 

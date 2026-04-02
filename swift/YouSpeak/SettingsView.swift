@@ -2,59 +2,83 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject private var s = SettingsManager.shared
+    @State private var selectedTab: Tab = .asr
     @State private var isCapturing = false
 
+    enum Tab: String, CaseIterable {
+        case asr    = "语音识别"
+        case llm    = "文本润色"
+        case hotkey = "快捷键"
+    }
+
     var body: some View {
-        TabView {
-            asrTab.tabItem    { Label("语音识别", systemImage: "mic") }
-            llmTab.tabItem    { Label("文本润色", systemImage: "wand.and.stars") }
-            hotkeyTab.tabItem { Label("快捷键",   systemImage: "keyboard") }
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            Group {
+                switch selectedTab {
+                case .asr:    asrTab
+                case .llm:    llmTab
+                case .hotkey: hotkeyTab
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding()
-        .frame(width: 440, height: 300)
     }
 
     // MARK: - ASR
 
     private var asrTab: some View {
-        Form {
-            Section("DashScope API") {
-                APIKeyField("API Key (sk-…)", text: $s.asrAPIKey)
-                Text("在 dashscope.console.aliyun.com 获取")
-                    .font(.caption).foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 14) {
+            Label("DashScope API Key", systemImage: "key.fill")
+                .font(.subheadline.bold())
+
+            APIKeyField("sk-…", text: $s.asrAPIKey)
+
+            HStack(spacing: 4) {
+                Image(systemName: "info.circle").font(.caption2)
+                Text("在 dashscope.console.aliyun.com 申请，有免费额度")
+                    .font(.caption)
             }
+            .foregroundStyle(.secondary)
         }
-        .padding()
+        .padding(16)
     }
 
     // MARK: - LLM
 
     private var llmTab: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 14) {
             Toggle("启用文本润色", isOn: $s.polishEnabled)
+                .font(.subheadline.bold())
 
             if s.polishEnabled {
-                Picker("服务商", selection: $s.llmProvider) {
-                    ForEach(LLMProvider.allCases) { p in
-                        Text(p.displayName).tag(p)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("通义千问 (Qwen) API Key", systemImage: "key.fill")
+                        .font(.caption).foregroundStyle(.secondary)
+                    APIKeyField("sk-…", text: $s.qwenAPIKey)
+                    HStack(spacing: 4) {
+                        Image(systemName: "info.circle").font(.caption2)
+                        Text("在 dashscope.console.aliyun.com 申请，模型默认使用 qwen-turbo")
+                            .font(.caption)
                     }
-                }
-                .pickerStyle(.segmented)
-
-                switch s.llmProvider {
-                case .qwen:
-                    APIKeyField("Qwen API Key", text: $s.qwenAPIKey)
-                    TextField("模型 (默认 qwen-turbo)", text: $s.qwenModel)
-                        .textFieldStyle(.roundedBorder)
-                case .doubao:
-                    APIKeyField("豆包 API Key", text: $s.doubaoAPIKey)
-                    TextField("模型 / Endpoint ID", text: $s.doubaoModel)
-                        .textFieldStyle(.roundedBorder)
+                    .foregroundStyle(.secondary)
                 }
             }
+
+            Spacer()
         }
-        .padding()
-        .animation(.default, value: s.llmProvider)
+        .padding(16)
         .animation(.default, value: s.polishEnabled)
     }
 
@@ -62,21 +86,27 @@ struct SettingsView: View {
 
     private var hotkeyTab: some View {
         VStack(spacing: 16) {
-            Text("当前快捷键").font(.headline)
+            VStack(spacing: 6) {
+                Text("当前快捷键").font(.subheadline.bold())
+                Text("点击下方框，再按想绑定的按键").font(.caption).foregroundStyle(.secondary)
+            }
 
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isCapturing ? Color.accentColor : Color.secondary, lineWidth: 2)
-                    .frame(width: 200, height: 50)
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.controlBackgroundColor))
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        isCapturing ? Color.accentColor : Color.secondary.opacity(0.3),
+                        lineWidth: isCapturing ? 2 : 1
+                    )
                 Text(s.hotkeyLabel)
-                    .font(.title2.monospaced())
+                    .font(.title2.monospaced().bold())
+                    .foregroundStyle(isCapturing ? Color.accentColor : Color.primary)
             }
+            .frame(width: 200, height: 56)
             .onTapGesture { isCapturing = true }
             .background(
                 HotkeyCapture(isActive: $isCapturing) { code, mods, label in
-                    // Only persist settings here. HotkeyManager is currently stopped
-                    // (AppDelegate stops it on openSettings); it will reload with the
-                    // new values when the settings window closes.
                     s.hotkeyCode      = Int(code)
                     s.hotkeyModifiers = mods.rawValue
                     s.hotkeyLabel     = label
@@ -84,20 +114,19 @@ struct SettingsView: View {
                 }
             )
 
-            if isCapturing {
-                Text("按下你想要的按键组合…").foregroundColor(.accentColor)
-            } else {
-                Text("点击上方框后按任意键").foregroundColor(.secondary)
-            }
+            Text(isCapturing ? "按下你想要的按键组合…" : "点击上方框后按任意键")
+                .font(.caption)
+                .foregroundStyle(isCapturing ? Color.accentColor : Color.secondary)
 
             Button("重置为 右⌥") {
-                // Same: only update settings; reload happens on window close.
                 s.hotkeyCode      = 61
                 s.hotkeyModifiers = 0
                 s.hotkeyLabel     = "右⌥"
             }
+            .buttonStyle(.bordered)
         }
-        .padding()
+        .padding(16)
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -137,14 +166,11 @@ final class HotkeyCaptureView: NSView {
         let code = CGKeyCode(event.keyCode)
         guard code != 0 else { return }
         let flags = CGEventFlags(rawValue: UInt64(event.modifierFlags.rawValue))
-        // Only fire on key-down (flags becoming non-zero for this key).
         guard flags.rawValue != 0 else { return }
         let label = modifierLabel(keyCode: code)
         guard !label.isEmpty else { return }
         onCapture?(code, flags, label)
     }
-
-    // MARK: - Label helpers
 
     private func keyLabel(event: NSEvent) -> String {
         var parts: [String] = []
@@ -159,7 +185,6 @@ final class HotkeyCaptureView: NSView {
         return parts.joined()
     }
 
-    /// Returns a label that distinguishes left vs right modifier keys by key code.
     private func modifierLabel(keyCode: CGKeyCode) -> String {
         switch keyCode {
         case 54: return "右⌘"
@@ -212,9 +237,6 @@ struct APIKeyField: View {
     }
 }
 
-// NSViewRepresentable wrapper around NSTextField / NSSecureTextField.
-// Unlike SwiftUI's SecureField, these respond correctly to ⌘V and
-// right-click → Paste without any extra configuration.
 private struct NativeTextField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
@@ -233,7 +255,6 @@ private struct NativeTextField: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSTextField, context: Context) {
-        // Only update if text changed externally (avoid cursor-jump on every keystroke).
         if nsView.stringValue != text {
             nsView.stringValue = text
         }
@@ -255,4 +276,5 @@ private struct NativeTextField: NSViewRepresentable {
 
 #Preview {
     SettingsView()
+        .frame(width: 420, height: 420)
 }

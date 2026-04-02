@@ -9,6 +9,16 @@ final class SpeechController: ObservableObject {
 
     enum State { case idle, recording, processing }
 
+    struct TranscriptionRecord: Identifiable {
+        let id   = UUID()
+        let text: String
+        let date = Date()
+    }
+
+    @Published private(set) var history: [TranscriptionRecord] = []
+
+    func clearHistory() { history = [] }
+
     private let recorder = AudioRecorder()
     private let injector = TextInjector()
     private var inFlight = false
@@ -62,6 +72,9 @@ final class SpeechController: ObservableObject {
             polished = raw
         }
         print("[输入] \(polished)")
+
+        history.insert(TranscriptionRecord(text: polished), at: 0)
+        if history.count > 50 { history.removeLast() }
 
         // type() is @MainActor async — yields between chars instead of blocking.
         await injector.type(polished)

@@ -9,8 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let hotkeyManager    = HotkeyManager()
     let speechController = SpeechController.shared
     private let statusBar = StatusBarController()
-    private var mainWindow:     NSWindow?
-    private var settingsWindow: NSWindow?
+    private var mainWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -93,45 +92,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    // MARK: - Settings window
+    // MARK: - Settings
 
     @objc func openSettings() {
-        if let w = settingsWindow {
-            w.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let w = NSWindow(
-            contentRect: .zero,
-            styleMask:   [.titled, .closable],
-            backing:     .buffered,
-            defer:       false
-        )
-        w.title                = "YouSpeak 设置"
-        w.contentView          = NSHostingView(rootView: SettingsView())
-        w.isReleasedWhenClosed = false
-        w.delegate             = self
-        w.center()
-        settingsWindow = w
-        w.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NotificationCenter.default.post(name: .showSettingsTab, object: nil)
+        showMain()
     }
 }
 
-// MARK: - NSWindowDelegate (settings window focus tracking)
-//
-// Stop the hotkey only while the settings window IS the key window so the
-// user can type / paste in it without accidentally triggering recording.
-// Resume the moment the user switches away — even if they never close the window.
-
-extension AppDelegate: NSWindowDelegate {
-    func windowDidBecomeKey(_ notification: Notification) {
-        guard notification.object as? NSWindow === settingsWindow else { return }
-        hotkeyManager.stop()
-    }
-
-    func windowDidResignKey(_ notification: Notification) {
-        guard notification.object as? NSWindow === settingsWindow else { return }
-        hotkeyManager.reload()
-    }
-}
