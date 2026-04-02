@@ -29,7 +29,9 @@ xcodebuild -exportArchive \
 APP="$EXPORT_DIR/YouSpeak.app"
 
 echo "=== 3. 公证 ==="
-xcrun notarytool submit "$APP" \
+ZIP="$SCRIPT_DIR/build/YouSpeak.zip"
+ditto -c -k --keepParent "$APP" "$ZIP"
+xcrun notarytool submit "$ZIP" \
   --key "$KEY_PATH" \
   --key-id "$KEY_ID" \
   --issuer "$ISSUER_ID" \
