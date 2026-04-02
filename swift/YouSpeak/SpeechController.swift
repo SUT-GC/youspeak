@@ -3,6 +3,8 @@ import Foundation
 /// Orchestrates recording → ASR → LLM polish → text injection.
 @MainActor
 final class SpeechController: ObservableObject {
+    static let shared = SpeechController()
+
     @Published private(set) var state: State = .idle
 
     enum State { case idle, recording, processing }

@@ -8,13 +8,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
 
     let hotkeyManager    = HotkeyManager()
-    let speechController = SpeechController()
+    let speechController = SpeechController.shared
     private let statusBar = StatusBarController()
+    private var mainWindow:     NSWindow?
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
-        NSApp.setActivationPolicy(.accessory)
+
+        // Show in Dock so the app is easy to find.
+        NSApp.setActivationPolicy(.regular)
 
         statusBar.setup(controller: speechController)
 
@@ -24,7 +27,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let opts: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true]
         AXIsProcessTrustedWithOptions(opts)
+
+        // Show the main window on every launch.
+        showMain()
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        // Re-show main window when user clicks the Dock icon.
+        if !hasVisibleWindows { showMain() }
+        return true
+    }
+
+    // MARK: - Main window
+
+    private func showMain() {
+        if let w = mainWindow {
+            w.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let w = NSWindow(
+            contentRect: .zero,
+            styleMask:   [.titled, .closable, .miniaturizable],
+            backing:     .buffered,
+            defer:       false
+        )
+        w.title                = "YouSpeak"
+        w.contentView          = NSHostingView(rootView: MainView())
+        w.isReleasedWhenClosed = false
+        w.center()
+        mainWindow = w
+        w.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: - Settings window
 
     @objc func openSettings() {
         if let w = settingsWindow {
@@ -32,7 +69,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-
         let w = NSWindow(
             contentRect: .zero,
             styleMask:   [.titled, .closable],
@@ -45,12 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         w.center()
         settingsWindow = w
 
-        // Stop hotkey tap while settings is open so key presses land in the
-        // settings UI rather than triggering recording.
         hotkeyManager.stop()
-
-        // When the window closes, reload the hotkey — this picks up any
-        // configuration changes the user may have made.
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object:  w,
